@@ -69,6 +69,82 @@ func PriorityRank(p string) int {
 	}
 }
 
+// Disposition tags. These record what a broker *replied*, so the app can
+// stop emailing a party that has already told us email is the wrong channel
+// - or that it holds no consumer data at all. They live in Tags rather than
+// in Category because the two facts are orthogonal (a broker can be both)
+// and because Category means *sector*: overwriting it would break
+// SelectCategories, i.e. `send --category marketing` would silently stop
+// covering a retagged broker.
+//
+// A tag is an assertion about the company, not about one user's results.
+// "They told us they are B2B-only" belongs here; "they had no record of me"
+// does not - that is a per-user, per-moment outcome and lives in history.db.
+const (
+	// TagB2BOnly marks a company that told us it holds no consumer data at
+	// all. Nothing to erase, so nothing to send, ever.
+	TagB2BOnly = "b2b-only"
+	// TagFormOnly marks a company that does hold consumer data but refuses
+	// requests by email and requires its web form. Still a live target -
+	// just one you action through OptOutURL, not SMTP.
+	TagFormOnly = "form-only"
+)
+
+var DispositionTags = []string{TagB2BOnly, TagFormOnly}
+
+// HasTag reports whether b carries tag (case-insensitive).
+func (b Broker) HasTag(tag string) bool {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	for _, t := range b.Tags {
+		if strings.ToLower(strings.TrimSpace(t)) == tag {
+			return true
+		}
+	}
+	return false
+}
+
+// Sendable reports whether an email request may be sent to this broker.
+//
+// This is the ONE gate every send path must consult. It used to be an
+// open-coded `b.Email != ""` check repeated in four places, which is how
+// two of them (handleAPISendOne and the pending-job resume in
+// internal/web/handlers_jobs.go) came to enforce less than the other two:
+// both look a broker up by ID and so never saw the list-level filtering
+// that carried the config exclusions. A broker the user has been told is
+// B2B-only must not be emailable through *any* door, including a bulk job
+// that was persisted before it was tagged and auto-resumes on next start.
+func (b Broker) Sendable() bool {
+	if strings.TrimSpace(b.Email) == "" {
+		return false
+	}
+	return !b.HasTag(TagB2BOnly) && !b.HasTag(TagFormOnly)
+}
+
+// NotSendableReason explains a false Sendable() in words fit for a UI or a
+// CLI line. Returns "" when the broker is sendable.
+func (b Broker) NotSendableReason() string {
+	switch {
+	case b.HasTag(TagB2BOnly):
+		return "B2B only - holds no consumer data"
+	case b.HasTag(TagFormOnly):
+		return "Accepts requests only through their web form"
+	case strings.TrimSpace(b.Email) == "":
+		return "No email on file"
+	}
+	return ""
+}
+
+// Sendable filters list down to the brokers an email may actually go to.
+func Sendable(list []Broker) []Broker {
+	out := make([]Broker, 0, len(list))
+	for _, b := range list {
+		if b.Sendable() {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
 func sanitizeBroker(b *Broker) {
 	if !isValidURL(b.OptOutURL) {
 		b.OptOutURL = ""
@@ -84,8 +160,13 @@ type Broker struct {
 	Email     string `yaml:"email"`
 	Website   string `yaml:"website,omitempty"`
 	OptOutURL string `yaml:"opt_out_url,omitempty"`
-	Region    string `yaml:"region"`             // "us", "eu", "global"
-	Category  string `yaml:"category,omitempty"` // "people-search", "marketing", "background-check", etc.
+	// Description is one short sentence on what this company does, shown as
+	// a column in the web UI so a user choosing who to write to can tell a
+	// people-search site from an ad-tech SSP without leaving the page.
+	// Sourced per docs; empty is fine and renders as a dash.
+	Description string `yaml:"description,omitempty"`
+	Region      string `yaml:"region"`             // "us", "eu", "global"
+	Category    string `yaml:"category,omitempty"` // "people-search", "marketing", "background-check", etc.
 	// Priority is how much this broker matters to a person trying to get
 	// removed: "high", "medium" or "low" (see Priorities). It's a filter,
 	// not a schedule - nothing sends automatically based on it. An empty

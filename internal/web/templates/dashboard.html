@@ -13,12 +13,18 @@
                 <p class="text-secondary mt-1">Your privacy protection overview</p>
             </div>
         </div>
-        <a href="/brokers" class="btn btn-primary">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-            </svg>
-            Send Removal Requests
-        </a>
+        <div class="flex flex-col items-start md:items-end gap-1">
+            <a href="/brokers" class="btn btn-primary">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+                Choose Brokers to Contact
+            </a>
+            <p class="text-xs text-muted">
+                Request type: <span class="text-secondary">{{.TemplateName}}</span> &middot;
+                <a href="/settings#template" class="text-accent hover:underline">change</a>
+            </p>
+        </div>
     </div>
 
     <!-- Stats Grid -->

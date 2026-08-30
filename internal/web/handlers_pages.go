@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/eraser-privacy/eraser/internal/broker"
+	"github.com/eraser-privacy/eraser/internal/config"
 	"github.com/eraser-privacy/eraser/internal/history"
 	"github.com/go-chi/chi/v5"
 )
@@ -24,6 +25,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	active := s.activeProfile(r)
 	data := map[string]interface{}{
 		"Title":         "Dashboard",
+		"TemplateName":  templateLabel(cfg),
 		"Profile":       active.Profile,
 		"BrokerCount":   len(s.brokerDB.Brokers),
 		"RecentHistory": s.getRecentHistory(active.ID, 10),
@@ -32,6 +34,32 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.renderWithCSRF(w, r, "dashboard.html", data)
+}
+
+// templateLabel renders the configured email template as something a person
+// recognises ("GDPR erasure (Article 17)"), not the bare config key ("gdpr").
+func templateLabel(cfg *config.Config) string {
+	name := ""
+	if cfg != nil {
+		name = cfg.Options.Template
+	}
+	switch name {
+	case "gdpr":
+		return "GDPR erasure (Article 17)"
+	case "ccpa":
+		return "CCPA deletion"
+	case "uk-access":
+		return "UK GDPR access (Article 15)"
+	case "uk-erasure":
+		return "UK GDPR erasure (Article 17)"
+	case "uk-combined":
+		return "UK GDPR access + erasure"
+	case "generic":
+		return "Generic privacy request"
+	case "":
+		return "not set"
+	}
+	return name
 }
 
 func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +91,12 @@ func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
 		"Total":        len(s.brokerDB.Brokers),
 		"Filtered":     len(brokers),
 		"DailyLimit":   dailyLimit,
+		// Which request the send button will actually send, and as whom.
+		// Without these the page's one destructive control gave no clue
+		// whether it was about to cite GDPR Article 17 or CCPA.
+		"TemplateName":  templateLabel(s.getConfig()),
+		"ProfileName":   s.activeProfile(r).FullName(),
+		"SendableCount": len(sendable(brokers)),
 	}
 	s.renderWithCSRF(w, r, "brokers.html", data)
 }

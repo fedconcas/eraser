@@ -37,6 +37,26 @@
         </div>
     </div>
 
+    <!-- What this page's send button will actually do. The button used to
+         say "Send to Selected" with nothing selectable and no indication of
+         which legal template it would cite. -->
+    <div class="card p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+            <span class="text-secondary">Request type:
+                <span class="font-medium text-primary">{{.TemplateName}}</span>
+            </span>
+            <span class="text-secondary">Sending as:
+                <span class="font-medium text-primary">{{.ProfileName}}</span>
+            </span>
+            <span class="text-secondary">Emailable in this view:
+                <span class="font-medium text-primary">{{.SendableCount}}</span>
+            </span>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="/settings#template" class="btn btn-ghost text-sm py-1 px-3">Change template</a>
+        </div>
+    </div>
+
     <!-- Daily limit info banner -->
     {{if gt .Filtered .DailyLimit}}
     <div class="alert alert-info mb-6">
@@ -151,201 +171,16 @@
         </div>
     </div>
 
-    <!-- Broker Table -->
+    <!-- Broker Table. The table markup lives in partials/broker-list.html and
+         is invoked here; the same partial is what /api/brokers returns for an
+         HTMX filter refresh, so the two can no longer drift apart. -->
     <div id="broker-list" class="card overflow-hidden">
-        <!-- Count header -->
-        <div class="px-4 py-3 border-b border-[var(--border)] bg-elevated">
-            <p class="text-sm text-secondary">Showing <span class="font-medium text-primary">{{.Filtered}}</span> of <span class="font-medium text-primary">{{.Total}}</span> brokers</p>
-        </div>
-
-        <!-- Desktop Table -->
-        <div class="hidden md:block overflow-x-auto">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Broker</th>
-                        <th>Category</th>
-                        <th>Priority</th>
-                        <th>Region</th>
-                        <th>Status</th>
-                        <th class="text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range .Brokers}}
-                    <tr>
-                        <td>
-                            <div class="flex flex-col">
-                                <span class="font-medium text-primary">{{.Name}}</span>
-                                {{if .Email}}
-                                <span class="text-sm text-muted">{{.Email}}</span>
-                                {{else}}
-                                <span class="text-sm text-warning" title="Needs manual follow-up - no email on file">No email on file</span>
-                                {{end}}
-                            </div>
-                        </td>
-                        <td>
-                            {{if .Category}}
-                            <span class="badge badge-neutral">{{.Category}}</span>
-                            {{else}}
-                            <span class="text-muted">—</span>
-                            {{end}}
-                        </td>
-                        <td>
-                            {{if .Priority}}
-                            <span class="badge {{if eq .Priority "high"}}badge-warning{{else if eq .Priority "medium"}}badge-info{{else}}badge-neutral{{end}}">{{.Priority}}</span>
-                            {{else}}
-                            <span class="text-muted">&mdash;</span>
-                            {{end}}
-                        </td>
-                        <td>
-                            {{if .Region}}
-                            <span class="text-secondary uppercase text-sm">{{.Region}}</span>
-                            {{else}}
-                            <span class="text-muted">—</span>
-                            {{end}}
-                        </td>
-                        <td id="status-{{.ID}}">
-                            {{if eq .Status "sent"}}
-                            <span class="badge badge-success">
-                                <span class="status-dot status-dot-success"></span>
-                                Sent
-                            </span>
-                            {{else if eq .Status "failed"}}
-                            <span class="badge badge-error">
-                                <span class="status-dot status-dot-error"></span>
-                                Failed
-                            </span>
-                            {{else}}
-                            <span class="badge badge-neutral">
-                                <span class="status-dot" style="background: var(--text-muted);"></span>
-                                Never sent
-                            </span>
-                            {{end}}
-                        </td>
-                        <td class="text-right">
-                            <div class="flex items-center justify-end gap-2">
-                                {{if .Email}}
-                                <button
-                                    class="btn btn-ghost text-sm py-1 px-3"
-                                    hx-post="/api/send/{{.ID}}"
-                                    hx-target="#status-{{.ID}}"
-                                    hx-swap="innerHTML"
-                                    hx-indicator="#spinner-{{.ID}}"
-                                >
-                                    Send
-                                    <span id="spinner-{{.ID}}" class="htmx-indicator ml-1">
-                                        <span class="spinner"></span>
-                                    </span>
-                                </button>
-                                {{else}}
-                                <button class="btn btn-ghost text-sm py-1 px-3" disabled title="No email on file">
-                                    Send
-                                </button>
-                                {{end}}
-                                {{if .OptOutURL}}
-                                <a href="{{.OptOutURL}}" target="_blank" class="btn btn-ghost text-sm py-1 px-3">
-                                    Opt-out
-                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-                                    </svg>
-                                </a>
-                                {{end}}
-                            </div>
-                        </td>
-                    </tr>
-                    {{else}}
-                    <tr>
-                        <td colspan="6" class="py-12 text-center">
-                            <div class="w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4" style="background: var(--bg-elevated);">
-                                <svg class="w-8 h-8 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                </svg>
-                            </div>
-                            <p class="text-secondary mb-1">No brokers found</p>
-                            <p class="text-sm text-muted">Try adjusting your search or filters</p>
-                        </td>
-                    </tr>
-                    {{end}}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Mobile Cards -->
-        <div class="md:hidden divide-y divide-[var(--border-subtle)]">
-            {{range .Brokers}}
-            <div class="p-4">
-                <div class="flex items-start justify-between mb-3">
-                    <div>
-                        <h3 class="font-medium text-primary">{{.Name}}</h3>
-                        {{if .Email}}
-                        <p class="text-sm text-muted">{{.Email}}</p>
-                        {{else}}
-                        <p class="text-sm text-warning">No email on file</p>
-                        {{end}}
-                    </div>
-                    <div id="status-mobile-{{.ID}}">
-                        {{if eq .Status "sent"}}
-                        <span class="badge badge-success">Sent</span>
-                        {{else if eq .Status "failed"}}
-                        <span class="badge badge-error">Failed</span>
-                        {{else}}
-                        <span class="badge badge-neutral">Pending</span>
-                        {{end}}
-                    </div>
-                </div>
-                <div class="flex items-center gap-2 mb-3 text-sm">
-                    {{if .Category}}
-                    <span class="badge badge-neutral">{{.Category}}</span>
-                    {{end}}
-                    {{if .Priority}}
-                    <span class="badge {{if eq .Priority "high"}}badge-warning{{else if eq .Priority "medium"}}badge-info{{else}}badge-neutral{{end}}">{{.Priority}}</span>
-                    {{end}}
-                    {{if .Region}}
-                    <span class="text-muted uppercase">{{.Region}}</span>
-                    {{end}}
-                </div>
-                <div class="flex gap-2">
-                    {{if .Email}}
-                    <button
-                        class="btn btn-primary flex-1 py-2"
-                        hx-post="/api/send/{{.ID}}"
-                        hx-target="#status-mobile-{{.ID}}"
-                        hx-swap="innerHTML"
-                    >
-                        Send Request
-                    </button>
-                    {{else}}
-                    <button class="btn btn-primary flex-1 py-2" disabled title="No email on file">
-                        No Email on File
-                    </button>
-                    {{end}}
-                    {{if .OptOutURL}}
-                    <a href="{{.OptOutURL}}" target="_blank" class="btn btn-secondary py-2">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-                        </svg>
-                    </a>
-                    {{end}}
-                </div>
-            </div>
-            {{else}}
-            <div class="p-8 text-center">
-                <div class="w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4" style="background: var(--bg-elevated);">
-                    <svg class="w-8 h-8 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                    </svg>
-                </div>
-                <p class="text-secondary mb-1">No brokers found</p>
-                <p class="text-sm text-muted">Try adjusting your search or filters</p>
-            </div>
-            {{end}}
-        </div>
+        {{template "partials/broker-list.html" .}}
     </div>
 
     <!-- Help text -->
     <p class="text-center text-sm text-muted mt-6">
-        Use search and filters to narrow down the list before sending.
+        Tick brokers to choose exactly who to write to, or leave everything unticked to send to all brokers matching the current filters.
     </p>
 </div>
 
@@ -468,8 +303,40 @@ async function startSendAll(statusFilter) {
     const btnText = document.getElementById(isRetry ? 'retry-failed-text' : 'send-all-text');
     const spinner = document.getElementById(isRetry ? 'retry-failed-spinner' : 'send-all-spinner');
 
+    // An explicit tick list only applies to the main send button. "Retry
+    // Failed" is its own status-scoped action and ignores selection.
+    const chosen = isRetry ? [] : Array.from(selectedBrokers);
+
+    // Confirm before sending. This is the one irreversible control on the
+    // page - it puts the user's name and address in front of a list of
+    // companies - so it states who, what and how many first. The template
+    // is named because it decides which law the email cites.
+    const templateName = {{.TemplateName}};
+    const profileName = {{.ProfileName}};
+    const dailyLimit = {{.DailyLimit}};
+    let target;
+    if (chosen.length > 0) {
+        const onScreen = visibleCheckboxes().filter(b => selectedBrokers.has(b.value)).length;
+        const offScreen = chosen.length - onScreen;
+        target = `${chosen.length} selected broker${chosen.length === 1 ? '' : 's'}`;
+        if (offScreen > 0) {
+            target += ` (${offScreen} not visible under the current filters)`;
+        }
+    } else if (isRetry) {
+        target = 'every broker whose last attempt failed';
+    } else {
+        target = 'every broker matching the current filters';
+    }
+    const capNote = chosen.length > dailyLimit
+        ? `\n\nOnly ${dailyLimit} will go today (daily send limit); the rest continue automatically on a later run.`
+        : '';
+    if (!confirm(`Send a "${templateName}" request as ${profileName} to ${target}?${capNote}`)) {
+        return;
+    }
+
     // Disable both buttons so a job can't be started twice from either one
     setButtonsDisabled(true);
+    btnText.dataset.busy = '1';
     btnText.textContent = 'Starting...';
     spinner.classList.remove('hidden');
 
@@ -481,10 +348,14 @@ async function startSendAll(statusFilter) {
     // Get CSRF token
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
-    const params = { search, category, priority, region };
+    const body = new URLSearchParams({ search, category, priority, region });
     if (statusFilter) {
-        params.status = statusFilter;
+        body.set('status', statusFilter);
     }
+    // Explicit picks are sent as repeated broker_ids fields. The server
+    // intersects them with the same filtered+sendable list a bulk send uses,
+    // so posting an ID can never reach a broker the list itself would refuse.
+    chosen.forEach(id => body.append('broker_ids', id));
 
     try {
         const resp = await fetch('/api/send-all', {
@@ -493,10 +364,13 @@ async function startSendAll(statusFilter) {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'X-CSRF-Token': csrfToken
             },
-            body: new URLSearchParams(params)
+            body: body
         });
 
         const data = await resp.json();
+        if (resp.ok && data.skipped) {
+            showNotice(data.skipped);
+        }
 
         if (!resp.ok) {
             showError(data.error || 'Failed to start sending');
@@ -512,6 +386,78 @@ async function startSendAll(statusFilter) {
         resetButtons();
     }
 }
+
+// ---------------------------------------------------------------------------
+// Broker selection.
+//
+// Selected IDs live here, outside #broker-list, because that element's
+// innerHTML is replaced wholesale on every filter keystroke (300ms debounce)
+// and on every job-progress tick - checkbox state stored in the DOM would be
+// wiped several times a second during a send. After each swap we re-apply the
+// set to whatever rows are now on screen.
+//
+// A selection that scrolls out of view via a filter change is still a
+// selection: the user picked those brokers deliberately, so they stay in the
+// set and still get sent to. The confirm dialog says how many are off-screen
+// so that is never a surprise.
+// ---------------------------------------------------------------------------
+const selectedBrokers = new Set();
+
+function visibleCheckboxes() {
+    return Array.from(document.querySelectorAll('#broker-list input.broker-select'));
+}
+
+function syncSelectionUI() {
+    const boxes = visibleCheckboxes();
+    boxes.forEach(box => { box.checked = selectedBrokers.has(box.value); });
+
+    const selectAll = document.querySelector('#broker-list [data-select-page]');
+    if (selectAll) {
+        const checkedCount = boxes.filter(b => b.checked).length;
+        selectAll.checked = boxes.length > 0 && checkedCount === boxes.length;
+        selectAll.indeterminate = checkedCount > 0 && checkedCount < boxes.length;
+    }
+
+    document.querySelectorAll('[data-selection-count]').forEach(el => {
+        el.textContent = String(selectedBrokers.size);
+    });
+
+    const btnText = document.getElementById('send-all-text');
+    if (btnText && !btnText.dataset.busy) {
+        btnText.textContent = selectedBrokers.size > 0
+            ? `Send to ${selectedBrokers.size} selected`
+            : 'Send to all matching';
+    }
+}
+
+document.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.matches('#broker-list input.broker-select')) {
+        if (t.checked) {
+            selectedBrokers.add(t.value);
+        } else {
+            selectedBrokers.delete(t.value);
+        }
+        syncSelectionUI();
+    } else if (t.matches('#broker-list [data-select-page]')) {
+        visibleCheckboxes().forEach(box => {
+            if (t.checked) {
+                selectedBrokers.add(box.value);
+            } else {
+                selectedBrokers.delete(box.value);
+            }
+        });
+        syncSelectionUI();
+    }
+});
+
+// Re-apply after every HTMX swap of the list, and once on first load.
+document.body.addEventListener('htmx:afterSwap', (e) => {
+    if (e.target && e.target.id === 'broker-list') {
+        syncSelectionUI();
+    }
+});
+document.addEventListener('DOMContentLoaded', syncSelectionUI);
 
 function showProgressUI() {
     const progressArea = document.getElementById('send-all-progress');
@@ -648,6 +594,14 @@ function setButtonsDisabled(disabled) {
     if (retryBtn) retryBtn.disabled = disabled;
 }
 
+function showNotice(msg) {
+    const area = document.getElementById('send-all-progress');
+    const el = document.createElement('div');
+    el.className = 'alert alert-info mb-4';
+    el.textContent = msg;
+    area.prepend(el);
+}
+
 function resetButtons() {
     const sendBtn = document.getElementById('send-all-btn');
     const sendText = document.getElementById('send-all-text');
@@ -657,12 +611,12 @@ function resetButtons() {
     const retrySpinner = document.getElementById('retry-failed-spinner');
 
     setButtonsDisabled(false);
-    if (sendText) sendText.textContent = 'Send to Selected';
+    if (sendText) delete sendText.dataset.busy;
     if (sendSpinner) sendSpinner.classList.add('hidden');
     if (retryText) retryText.textContent = 'Retry Failed';
     if (retrySpinner) retrySpinner.classList.add('hidden');
-    lastListRefreshProcessed = -1;
-    lastListRefreshAt = 0;
+    // Restores "Send to N selected" / "Send to all matching".
+    syncSelectionUI();
 }
 </script>
 {{end}}

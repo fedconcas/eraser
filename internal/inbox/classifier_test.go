@@ -218,11 +218,6 @@ func TestRejectionPatterns(t *testing.T) {
 			expected: ResponseRejected,
 		},
 		{
-			name:     "B2B platform",
-			body:     "Tyler - we are a b2b platform and do not have your information.",
-			expected: ResponseRejected,
-		},
-		{
 			name:     "Never existed in database",
 			body:     "the information below has never existed in our database.",
 			expected: ResponseRejected,
@@ -439,6 +434,62 @@ func TestTicketPatterns(t *testing.T) {
 			result := ClassifyResponse(email)
 			if result.Type != tt.expected {
 				t.Errorf("got %s, want %s (confidence: %.2f)", result.Type, tt.expected, result.Confidence)
+			}
+		})
+	}
+}
+
+// TestB2BOnlySeparateFromRejection pins the distinction the two types
+// encode. "No record of you" is a per-user result and must stay a
+// rejection; "we are B2B-only" is a permanent property of the company and
+// is the only one of the two that justifies tagging a broker so it is never
+// emailed again.
+func TestB2BOnlySeparateFromRejection(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want ResponseType
+	}{
+		{
+			name: "b2b only claim",
+			body: "Thanks for writing. We are a business-to-business provider and do not hold personal data about consumers.",
+			want: ResponseB2BOnly,
+		},
+		{
+			name: "only works with businesses",
+			body: "We only work with businesses, so there is nothing for us to erase here.",
+			want: ResponseB2BOnly,
+		},
+		{
+			name: "b2b claim outweighs an incidental no-record phrase",
+			body: "We are a B2B company. We have no record of you in our database.",
+			want: ResponseB2BOnly,
+		},
+		{
+			name: "plain no-record result stays a rejection",
+			body: "We do not have any records matching the details you provided.",
+			want: ResponseRejected,
+		},
+		{
+			name: "credit agency holding nothing this month stays a rejection",
+			body: "Your name was not identified in our database.",
+			want: ResponseRejected,
+		},
+		{
+			// A real reply, previously asserted as ResponseRejected in
+			// TestRejectionPatterns. Reclassifying it is the point of the
+			// split: it states a permanent property of the company, and
+			// the "do not have your information" half is incidental.
+			name: "real b2b reply that used to be scored as a rejection",
+			body: "Tyler - we are a b2b platform and do not have your information.",
+			want: ResponseB2BOnly,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ClassifyResponse(&Email{Subject: "Re: Data erasure request", Body: tt.body})
+			if got.Type != tt.want {
+				t.Errorf("ClassifyResponse() = %q (%s), want %q", got.Type, got.Reason, tt.want)
 			}
 		})
 	}

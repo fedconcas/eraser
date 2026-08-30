@@ -67,11 +67,14 @@ func (s *Server) resumePendingJob(state *PersistentJobState) {
 	var toSend []BrokerWithStatus
 	for _, id := range state.RemainingBrokers {
 		if b, ok := brokerMap[id]; ok {
-			// Skip brokers with no address, same as the initial build in
-			// handleAPISendAll. A job persisted before cleanup-bounces (or
-			// mark-bounced) cleared an address would otherwise resume into
-			// a send with an empty To:.
-			if strings.TrimSpace(b.Email) == "" {
+			// Apply the same gate as the initial build in handleAPISendAll.
+			// A job persisted before cleanup-bounces (or mark-bounced)
+			// cleared an address would otherwise resume into a send with an
+			// empty To: - and, worse, a job persisted before a broker was
+			// tagged b2b-only/form-only would resume into emailing a party
+			// that has already told us not to. This path auto-runs at
+			// startup (checkPendingJob), so nothing else gets a say.
+			if !b.Sendable() {
 				continue
 			}
 			toSend = append(toSend, BrokerWithStatus{Broker: b, Status: "never"})
@@ -125,9 +128,13 @@ func (s *Server) handleAPISendOne(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if br.Email == "" {
+	// Sendable(), not a bare empty-address check: this endpoint resolves the
+	// broker by ID and so never passes through the list-level filtering that
+	// getBrokersWithStatus applies, which is how a broker excluded there
+	// stayed reachable through this door.
+	if !br.Sendable() {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`<span class="text-amber-600">No email on file - needs manual follow-up (check for an opt-out form/portal)</span>`))
+		_, _ = fmt.Fprintf(w, `<span class="text-amber-600">%s - needs manual follow-up (check for an opt-out form/portal)</span>`, template.HTMLEscapeString(br.NotSendableReason()))
 		return
 	}
 
@@ -240,9 +247,17 @@ func (s *Server) handleAPISendAll(w http.ResponseWriter, r *http.Request) {
 	region := r.FormValue("region")
 	priority := r.FormValue("priority")
 	status := r.FormValue("status")
+	chosenIDs := r.Form["broker_ids"]
 
-	// If no status filter specified, default to pending (never sent)
-	if status == "" {
+	// If no status filter specified, default to pending (never sent).
+	//
+	// Explicit picks suppress that default. The user ticking a broker is a
+	// direct instruction, and the default would silently drop every already-
+	// sent broker from it - tick 20 rows including ones you wrote to last
+	// month and only the never-sent ones would go, with nothing on screen
+	// saying why. It also makes a re-send after a corrected address possible
+	// from the UI at all, which the pending default otherwise forbids.
+	if status == "" && len(chosenIDs) == 0 {
 		status = "pending"
 	}
 
@@ -253,13 +268,45 @@ func (s *Server) handleAPISendAll(w http.ResponseWriter, r *http.Request) {
 	// cleanup-bounces, and the whole non-broker category), handing SMTP an
 	// empty To: and burning daily-limit budget on guaranteed failures. The
 	// CLI `send` and the single-broker endpoint have always skipped them.
-	toSend := withEmail(s.getBrokersWithStatus(activeProfile.ID, brokerQuery{
+	// Build the candidate list the same way the page did, then narrow to the
+	// explicit picks. Order matters: the picks are intersected with this
+	// list, never looked up in s.brokerDB directly, so a posted ID cannot
+	// reach a broker that the config exclusions, the filters or the
+	// sendable gate would refuse. Posting an arbitrary ID is otherwise a way
+	// around every one of them.
+	candidates := sendable(s.getBrokersWithStatus(activeProfile.ID, brokerQuery{
 		Search:   search,
 		Category: category,
 		Region:   region,
 		Priority: priority,
 		Status:   status,
 	}))
+
+	toSend := candidates
+	var skippedNote string
+	if len(chosenIDs) > 0 {
+		allowed := make(map[string]bool, len(candidates))
+		for _, b := range candidates {
+			allowed[strings.ToLower(b.ID)] = true
+		}
+		picked := make(map[string]bool, len(chosenIDs))
+		for _, id := range chosenIDs {
+			picked[strings.ToLower(strings.TrimSpace(id))] = true
+		}
+
+		toSend = make([]BrokerWithStatus, 0, len(picked))
+		for _, b := range candidates {
+			if picked[strings.ToLower(b.ID)] {
+				toSend = append(toSend, b)
+			}
+		}
+
+		// Say so when a pick was dropped, rather than silently sending to
+		// fewer brokers than the user ticked.
+		if dropped := len(picked) - len(toSend); dropped > 0 {
+			skippedNote = fmt.Sprintf("%d selected broker(s) were skipped: no address on file, marked B2B-only or web-form-only, or excluded by your config.", dropped)
+		}
+	}
 
 	// Order high-priority brokers first, the same way `eraser send` does.
 	// processSendJob pauses this job when it hits daily_send_limit and
@@ -272,7 +319,9 @@ func (s *Server) handleAPISendAll(w http.ResponseWriter, r *http.Request) {
 
 	if len(toSend) == 0 {
 		noneMsg := "No pending brokers to send to."
-		if status == "failed" {
+		if len(chosenIDs) > 0 {
+			noneMsg = "None of the selected brokers can be emailed: no address on file, marked B2B-only or web-form-only, or excluded by your config."
+		} else if status == "failed" {
 			noneMsg = "No failed brokers to retry."
 		} else if status != "" && status != "pending" {
 			noneMsg = fmt.Sprintf("No brokers matching status %q to send to.", status)
@@ -322,21 +371,27 @@ func (s *Server) handleAPISendAll(w http.ResponseWriter, r *http.Request) {
 	go s.processSendJob(job, toSend, sender)
 
 	// Return job ID immediately
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	resp := map[string]interface{}{
 		"job_id": job.ID,
 		"total":  len(toSend),
-	})
+	}
+	if skippedNote != "" {
+		resp["skipped"] = skippedNote
+	}
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// withEmail drops brokers with no contact address on file. They can't be
-// emailed by definition - they take requests through a web form or DSR
-// portal, or their address bounced and was cleared - and belong in the
-// manual-follow-up flow (`list-brokers --missing-email`, `pipeline`)
-// instead of in a send job's total.
-func withEmail(brokers []BrokerWithStatus) []BrokerWithStatus {
+// sendable drops brokers an email must not go to: no contact address on
+// file, or a disposition tag saying email is the wrong channel (they
+// require their web form) or that there is nothing to ask for at all (B2B
+// only). They belong in the manual-follow-up flow
+// (`list-brokers --missing-email`, `pipeline`) instead of in a send job's
+// total. See broker.Broker.Sendable - the same gate the CLI, the
+// single-broker endpoint and the job-resume path all use.
+func sendable(brokers []BrokerWithStatus) []BrokerWithStatus {
 	result := make([]BrokerWithStatus, 0, len(brokers))
 	for _, b := range brokers {
-		if strings.TrimSpace(b.Email) != "" {
+		if b.Sendable() {
 			result = append(result, b)
 		}
 	}
