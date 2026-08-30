@@ -257,6 +257,93 @@ func TestBrokersPageRendersPriorityFilter(t *testing.T) {
 	}
 }
 
+// TestGetBrokersWithStatusTagFilter covers the disposition-tag filter. The
+// point of the filter is that a tag is orthogonal to the sector, so the
+// combining cases matter more than the plain ones: retagging a broker must
+// never be a way of losing it out of its category.
+func TestGetBrokersWithStatusTagFilter(t *testing.T) {
+	s := newTestServer(t, testConfig())
+	s.brokerDB.Brokers = []broker.Broker{
+		{ID: "demandscience", Name: "DemandScience", Region: "us", Category: "marketing", Tags: []string{broker.TagB2BOnly}},
+		{ID: "cuebiq", Name: "Cuebiq", Region: "us", Category: "marketing", Tags: []string{broker.TagFormOnly}},
+		{ID: "spokeo", Name: "Spokeo", Region: "us", Category: "people-search"},
+	}
+
+	tests := []struct {
+		name  string
+		query brokerQuery
+		want  []string
+	}{
+		{"blank tag returns everything", brokerQuery{}, []string{"demandscience", "cuebiq", "spokeo"}},
+		{"b2b-only", brokerQuery{Tag: broker.TagB2BOnly}, []string{"demandscience"}},
+		{"form-only", brokerQuery{Tag: broker.TagFormOnly}, []string{"cuebiq"}},
+		{"case-insensitive", brokerQuery{Tag: "B2B-Only"}, []string{"demandscience"}},
+		{"unknown tag matches nothing", brokerQuery{Tag: "not-a-tag"}, nil},
+		{"a tagged broker keeps its category", brokerQuery{Tag: broker.TagB2BOnly, Category: "marketing"}, []string{"demandscience"}},
+		{"and is absent from another one", brokerQuery{Tag: broker.TagB2BOnly, Category: "people-search"}, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var ids []string
+			for _, b := range s.getBrokersWithStatus("default", tt.query) {
+				ids = append(ids, b.ID)
+			}
+			if !reflect.DeepEqual(ids, tt.want) {
+				t.Errorf("getBrokersWithStatus(%+v) = %v, want %v", tt.query, ids, tt.want)
+			}
+		})
+	}
+}
+
+// TestBrokersPageRendersTagFilter is the template-level half: the dropdown
+// must offer every DispositionTags value even when the loaded data has none
+// of them (it is a closed vocabulary, not a derived one), the badge must
+// render, and the filter must survive the trip through both the page handler
+// and the HTMX fragment endpoint.
+func TestBrokersPageRendersTagFilter(t *testing.T) {
+	s := newTestServer(t, testConfig())
+	s.brokerDB.Brokers = []broker.Broker{
+		{ID: "demandscience", Name: "DemandScience", Email: "p@demandscience.example", Region: "us", Category: "marketing", Tags: []string{broker.TagB2BOnly}},
+		{ID: "spokeo", Name: "Spokeo", Email: "privacy@spokeo.com", Region: "us", Category: "people-search"},
+	}
+	router := s.setupRouter()
+
+	tests := []struct {
+		name         string
+		url          string
+		wantContains []string
+		wantMissing  string
+	}{
+		{"dropdown offers the whole closed vocabulary", "/brokers", []string{"All Dispositions", broker.TagB2BOnly, broker.TagFormOnly}, ""},
+		{"page, b2b-only", "/brokers?tag=b2b-only", []string{"DemandScience", "B2B only - holds no consumer data"}, "Spokeo"},
+		{"htmx fragment, b2b-only", "/api/brokers?tag=b2b-only", []string{"DemandScience"}, "Spokeo"},
+		{"htmx fragment, form-only matches nobody here", "/api/brokers?tag=form-only", nil, "DemandScience"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			req.Host = "127.0.0.1"
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s = %d, want 200", tt.url, rec.Code)
+			}
+			body := rec.Body.String()
+			for _, want := range tt.wantContains {
+				if !strings.Contains(body, want) {
+					t.Errorf("GET %s: response is missing %q", tt.url, want)
+				}
+			}
+			if tt.wantMissing != "" && strings.Contains(body, tt.wantMissing) {
+				t.Errorf("GET %s: tag filter let %q through", tt.url, tt.wantMissing)
+			}
+		})
+	}
+}
+
 // TestSendAllExcludesMissingEmailBrokers is a regression test: "Send to All"
 // claimed in a comment that it never targeted address-less brokers, but only
 // passed MissingEmail:false (which means "don't narrow *to* them"), so every

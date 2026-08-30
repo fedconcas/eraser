@@ -621,6 +621,11 @@ type brokerQuery struct {
 	Priority     string
 	Status       string
 	MissingEmail bool
+	// Tag narrows to brokers carrying one broker.DispositionTags value.
+	// It is deliberately separate from Category: a disposition is what a
+	// company told us, a category is what sector it trades in, and the two
+	// have to be filterable independently.
+	Tag string
 }
 
 // getBrokersWithStatus returns brokers with their history status
@@ -662,6 +667,7 @@ func (s *Server) getBrokersWithStatus(profileID string, q brokerQuery) []BrokerW
 	// rather than matching nothing, matching how a bogus category or region
 	// in the query string already behaves.
 	priority := broker.NormalizePriority(q.Priority)
+	tag := strings.ToLower(strings.TrimSpace(q.Tag))
 
 	var result []BrokerWithStatus
 	for _, b := range s.brokerDB.Brokers {
@@ -699,6 +705,11 @@ func (s *Server) getBrokersWithStatus(profileID string, q brokerQuery) []BrokerW
 		// Missing-email filter - brokers with no contact address on file,
 		// mirrors the CLI's `list-brokers --missing-email`
 		if q.MissingEmail && b.Email != "" {
+			continue
+		}
+
+		// Disposition-tag filter - mirrors the CLI's `list-brokers --tag`
+		if tag != "" && !b.HasTag(tag) {
 			continue
 		}
 
@@ -746,6 +757,15 @@ func (s *Server) getUniqueValues(getter func(broker.Broker) string) []string {
 
 func (s *Server) getUniqueCategories() []string {
 	return s.getUniqueValues(func(b broker.Broker) string { return b.Category })
+}
+
+// getDispositionTags is the source for the /brokers tag dropdown. Unlike
+// categories and regions it is NOT derived from the loaded data: the
+// vocabulary is closed (broker.DispositionTags) and mostly unpopulated, so
+// deriving it would leave the filter empty until something happened to be
+// tagged - exactly when you most want to check that nothing is.
+func (s *Server) getDispositionTags() []string {
+	return broker.DispositionTags
 }
 
 func (s *Server) getUniqueRegions() []string {

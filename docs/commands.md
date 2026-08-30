@@ -52,6 +52,18 @@ Every broker carries a `priority` of `high`, `medium` or `low` (see [architectur
 
 The web UI's brokers page has the same two selectors, and "Send to All" honours whatever is selected.
 
+### Filtering by disposition tag
+
+`tags` records what a company told us about itself - `b2b-only` or `form-only` (see [architecture.md](architecture.md#broker)). A tagged broker can never be emailed, so this filter is how you see who is in that state and why:
+
+```bash
+./eraser list-brokers --tag b2b-only                  # everyone who said they hold no consumer data
+./eraser list-brokers --tag form-only --region eu     # composes with every other filter
+./eraser list-brokers --tag b2b-only --category marketing  # tags are orthogonal to sector
+```
+
+An unrecognised `--tag` is an error rather than an empty list, so a typo doesn't read as "no such brokers". The web UI's brokers page has the same selector ("All Dispositions"), and tags show as badges beside the category.
+
 There is deliberately **no** `priority` key in `config.yaml`. Priority is a per-run choice, not a standing policy, and a config key would have to be enforced separately in the CLI and web code paths (which is exactly how `excluded_categories` came to be silently ignored by the web UI once already). Use `--priority` per run instead.
 
 Note that `send` orders high-priority brokers first within a run regardless of `--priority`. That only matters when `daily_send_limit` truncates the run: the cap then spends its budget on the brokers that matter most, and the rest go out on the next run. Nobody is dropped, and ordering within a priority band still follows `data/brokers.yaml`.

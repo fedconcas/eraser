@@ -96,7 +96,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="keyup changed delay:300ms"
                     hx-target="#broker-list"
-                    hx-include="[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email']"
+                    hx-include="[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
                 >
             </div>
 
@@ -108,7 +108,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='category'],[name='priority'],[name='region'],[name='missing_email']"
+                    hx-include="#broker-search,[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
                 >
                     <option value="">All Statuses</option>
                     <option value="pending" {{if eq $.Status "pending"}}selected{{end}}>Pending</option>
@@ -121,11 +121,24 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='priority'],[name='region'],[name='missing_email']"
+                    hx-include="#broker-search,[name='status'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
                 >
                     <option value="">All Categories</option>
                     {{range .Categories}}
                     <option value="{{.}}" {{if eq . $.Category}}selected{{end}}>{{.}}</option>
+                    {{end}}
+                </select>
+                <select
+                    name="tag"
+                    class="input w-auto min-w-[150px]"
+                    hx-get="/api/brokers"
+                    hx-trigger="change"
+                    hx-target="#broker-list"
+                    hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email']"
+                >
+                    <option value="">All Dispositions</option>
+                    {{range .Tags}}
+                    <option value="{{.}}" {{if eq . $.Tag}}selected{{end}}>{{.}}</option>
                     {{end}}
                 </select>
                 <select
@@ -134,7 +147,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='category'],[name='region'],[name='missing_email']"
+                    hx-include="#broker-search,[name='status'],[name='category'],[name='region'],[name='missing_email'],[name='tag']"
                 >
                     <option value="">All Priorities</option>
                     {{range .Priorities}}
@@ -147,7 +160,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='missing_email']"
+                    hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='missing_email'],[name='tag']"
                 >
                     <option value="">All Regions</option>
                     {{range .Regions}}
@@ -163,7 +176,7 @@
                         hx-get="/api/brokers"
                         hx-trigger="change"
                         hx-target="#broker-list"
-                        hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region']"
+                        hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='tag']"
                     >
                     Missing email only
                 </label>
@@ -204,6 +217,7 @@ function currentFilters() {
         category: document.querySelector('[name="category"]').value,
         priority: document.querySelector('[name="priority"]').value,
         region: document.querySelector('[name="region"]').value,
+        tag: document.querySelector('[name="tag"]').value,
         missing_email: document.querySelector('[name="missing_email"]').checked ? 'true' : ''
     };
 }

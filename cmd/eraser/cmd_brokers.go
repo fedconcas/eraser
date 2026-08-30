@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/eraser-privacy/eraser/internal/broker"
@@ -11,7 +12,7 @@ import (
 )
 
 func listBrokersCmd() *cobra.Command {
-	var region, category, search, priority string
+	var region, category, search, priority, tag string
 	var missingEmail bool
 
 	cmd := &cobra.Command{
@@ -19,7 +20,7 @@ func listBrokersCmd() *cobra.Command {
 		Short: "List all data brokers in the database",
 		Long:  "Show all data brokers that will receive removal requests.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runListBrokers(region, category, priority, search, missingEmail)
+			return runListBrokers(region, category, priority, search, tag, missingEmail)
 		},
 	}
 
@@ -27,6 +28,7 @@ func listBrokersCmd() *cobra.Command {
 	cmd.Flags().StringVar(&category, "category", "", "Only show brokers in this category")
 	cmd.Flags().StringVar(&priority, "priority", "", "Only show brokers with this priority (high, medium, or low)")
 	cmd.Flags().StringVar(&search, "search", "", "Only show brokers whose name or ID contains this text")
+	cmd.Flags().StringVar(&tag, "tag", "", fmt.Sprintf("Only show brokers carrying this disposition tag (%s)", strings.Join(broker.DispositionTags, ", ")))
 	cmd.Flags().BoolVar(&missingEmail, "missing-email", false, "Only show brokers with no email on file (need manual follow-up)")
 
 	return cmd
@@ -43,7 +45,7 @@ func addBrokerCmd() *cobra.Command {
 	}
 }
 
-func runListBrokers(region, category, priority, search string, missingEmail bool) error {
+func runListBrokers(region, category, priority, search, tag string, missingEmail bool) error {
 	brokerDB, err := broker.LoadFromFile(resolveBrokerPath())
 	if err != nil {
 		return fmt.Errorf("failed to load brokers: %w", err)
@@ -52,6 +54,12 @@ func runListBrokers(region, category, priority, search string, missingEmail bool
 	region = strings.ToLower(strings.TrimSpace(region))
 	category = strings.ToLower(strings.TrimSpace(category))
 	search = strings.ToLower(strings.TrimSpace(search))
+
+	// An unknown --tag would match nothing and read as "no such broker" rather
+	// than "no such tag", the same trap --priority already guards against.
+	if tag = strings.ToLower(strings.TrimSpace(tag)); tag != "" && !slices.Contains(broker.DispositionTags, tag) {
+		return fmt.Errorf("invalid --tag: must be one of %s", strings.Join(broker.DispositionTags, ", "))
+	}
 
 	// An unrecognized --priority normalizes to "", which would silently mean
 	// "no priority filter" and list everything - tell the user instead.
@@ -79,10 +87,13 @@ func runListBrokers(region, category, priority, search string, missingEmail bool
 		if missingEmail && b.Email != "" {
 			continue
 		}
+		if tag != "" && !b.HasTag(tag) {
+			continue
+		}
 		matched = append(matched, b)
 	}
 
-	if region != "" || category != "" || priority != "" || search != "" || missingEmail {
+	if region != "" || category != "" || priority != "" || search != "" || tag != "" || missingEmail {
 		fmt.Printf("📋 Data Brokers (%d of %d total match your filters)\n", len(matched), len(brokerDB.Brokers))
 	} else {
 		fmt.Printf("📋 Data Brokers (%d total)\n", len(matched))
@@ -109,6 +120,11 @@ func runListBrokers(region, category, priority, search string, missingEmail bool
 		if b.Priority != "" {
 			fmt.Printf("  ⭐ Priority: %s\n", b.Priority)
 		}
+		// Only spelled out for a tag-driven block - the "no email on file"
+		// case is already stated on the address line above.
+		if len(b.Tags) > 0 {
+			fmt.Printf("  🏷️  %s (%s)\n", strings.Join(b.Tags, ", "), b.NotSendableReason())
+		}
 	}
 
 	return nil
@@ -129,7 +145,7 @@ func runAddBroker() error {
 	b.Website = prompt(reader, "Website (optional): ")
 	b.OptOutURL = prompt(reader, "Opt-out URL (optional): ")
 	b.Region = prompt(reader, "Region (us/eu/global): ")
-	b.Category = prompt(reader, "Category (people-search/marketing/background-check): ")
+	b.Category = prompt(reader, "Category (people-search/marketing/background-check/financial-b2b/data-intermediary/device-id-only/requires-id/non-broker): ")
 	b.Priority = broker.NormalizePriority(prompt(reader, "Priority (high/medium/low, optional): "))
 
 	// Load existing brokers

@@ -70,6 +70,7 @@ func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
 		Priority:     r.URL.Query().Get("priority"),
 		Status:       r.URL.Query().Get("status"),
 		MissingEmail: r.URL.Query().Get("missing_email") == "true",
+		Tag:          r.URL.Query().Get("tag"),
 	}
 
 	brokers := s.getBrokersWithStatus(s.activeProfile(r).ID, q)
@@ -80,6 +81,7 @@ func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
 		"Title":        "Data Brokers",
 		"Brokers":      brokers,
 		"Categories":   s.getUniqueCategories(),
+		"Tags":         s.getDispositionTags(),
 		"Regions":      s.getUniqueRegions(),
 		"Priorities":   broker.Priorities,
 		"Search":       q.Search,
@@ -88,6 +90,7 @@ func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
 		"Priority":     q.Priority,
 		"Status":       q.Status,
 		"MissingEmail": q.MissingEmail,
+		"Tag":          q.Tag,
 		"Total":        len(s.brokerDB.Brokers),
 		"Filtered":     len(brokers),
 		"DailyLimit":   dailyLimit,
