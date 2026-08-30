@@ -24,7 +24,7 @@ type EmailData struct {
 	FullName       string
 	Email          string
 	OtherEmails    string // comma-separated additional emails, empty if none
-	OtherNames     string // comma-separated name variants, empty if none
+	OtherNames     string // semicolon-separated name variants, empty if none
 	OtherAddresses string // semicolon-separated previous addresses, empty if none
 	Address        string
 	City           string
@@ -92,12 +92,16 @@ func (e *Engine) Render(templateName string, profile config.Profile, b broker.Br
 
 	now := time.Now()
 	data := EmailData{
-		FirstName:      profile.FirstName,
-		LastName:       profile.LastName,
-		FullName:       profile.FullName(),
-		Email:          profile.Email,
-		OtherEmails:    strings.Join(profile.AdditionalEmails, ", "),
-		OtherNames:     strings.Join(profile.NameVariants, ", "),
+		FirstName:   profile.FirstName,
+		LastName:    profile.LastName,
+		FullName:    profile.FullName(),
+		Email:       profile.Email,
+		OtherEmails: strings.Join(profile.AdditionalEmails, ", "),
+		// Semicolons, like previous addresses below: a name variant may itself
+		// contain a comma ("Smith, John"), and joining those with ", " would
+		// read to the broker as two separate variants. Invisible for the
+		// common case of a single variant.
+		OtherNames:     strings.Join(profile.NameVariants, "; "),
 		OtherAddresses: strings.Join(profile.PreviousAddresses, "; "),
 		Address:        profile.Address,
 		City:           profile.City,

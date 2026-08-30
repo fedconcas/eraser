@@ -176,24 +176,34 @@ func SplitAndTrimAny(s, seps string) []string {
 	return result
 }
 
-// NormalizeAdditionalEmails cleans a parsed additional-address list for
-// storage: it drops case-insensitive duplicates and any entry that merely
-// repeats the primary address (which every template already prints on its own
-// line, so listing it again just pads the request). Original casing of the
-// first occurrence is kept - some brokers echo the address back verbatim, and
-// the local part of an address is technically case-sensitive.
+// NormalizeList cleans one of the profile's "other identities" lists
+// (additional emails, name variants, previous addresses, additional phones)
+// for storage: it drops case-insensitive duplicates and, when primary is
+// non-empty, any entry that merely repeats it. Every template prints the
+// primary value on its own line already - "Email Address:" above "Other Email
+// Addresses Used:", "Phone:" above "Other Phone Numbers:" - so repeating it in
+// the list only pads the request.
 //
-// It deliberately does no validity checking; callers validate before storing
-// (see internal/email.ValidateEmail) so that an invalid entry can be reported
-// against the field the user typed it into rather than silently dropped here.
-func NormalizeAdditionalEmails(primary string, emails []string) []string {
-	seen := make(map[string]bool, len(emails)+1)
+// Pass "" as primary for lists that have no single canonical counterpart
+// (name variants, previous addresses); that skips the drop step and leaves
+// plain de-duplication.
+//
+// Casing of the first occurrence is kept - some brokers echo values back
+// verbatim, and an email's local part is technically case-sensitive. Note the
+// case-folded comparison is the only notion of "same" here: it won't collapse
+// two spellings of one phone number ("+371 20 123 456" vs "+37120123456").
+//
+// It deliberately does no validity checking, so a caller that has a validator
+// for its field (only emails do) can report a bad entry against the input the
+// user typed it into rather than have it silently vanish here.
+func NormalizeList(primary string, items []string) []string {
+	seen := make(map[string]bool, len(items)+1)
 	if primary = strings.TrimSpace(primary); primary != "" {
 		seen[strings.ToLower(primary)] = true
 	}
 
-	result := make([]string, 0, len(emails))
-	for _, e := range emails {
+	result := make([]string, 0, len(items))
+	for _, e := range items {
 		e = strings.TrimSpace(e)
 		key := strings.ToLower(e)
 		if e == "" || seen[key] {

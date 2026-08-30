@@ -147,7 +147,19 @@ func TestSplitAndTrimAny(t *testing.T) {
 		// CLI's comma-separated answer into it gets the same result.
 		{"mixed separators", "a@x.com, b@x.com\nc@x.com", ",\n", []string{"a@x.com", "b@x.com", "c@x.com"}},
 		{"blank lines and padding", " a@x.com \n\n\n  b@x.com  \n", ",\n", []string{"a@x.com", "b@x.com"}},
+		// Browsers submit textareas with CRLF. This passes with or without
+		// "\r" in the separator set, since TrimSpace strips a trailing "\r"
+		// on its own - it's here to pin the common case, not as evidence
+		// that carrying "\r" matters.
 		{"CRLF input", "a@x.com\r\nb@x.com", ",\n\r", []string{"a@x.com", "b@x.com"}},
+		// This is the case that actually needs "\r" in the set: a bare CR
+		// with no newline after it. Without it the two values fuse into one
+		// entry carrying an interior control character, which would be
+		// written straight into the outgoing email body.
+		{"interior bare CR splits only when \\r is a separator", "a@x.com\rb@x.com", ",\n\r",
+			[]string{"a@x.com", "b@x.com"}},
+		{"interior bare CR survives when \\r is not a separator", "a@x.com\rb@x.com", ",\n",
+			[]string{"a@x.com\rb@x.com"}},
 		// seps is a character set, not a separator string: each of these is
 		// one delimiter, and callers passing a single character (the CLI)
 		// behave exactly as they did with strings.Split.
@@ -171,7 +183,7 @@ func TestSplitAndTrimAny(t *testing.T) {
 	}
 }
 
-func TestNormalizeAdditionalEmails(t *testing.T) {
+func TestNormalizeList(t *testing.T) {
 	tests := []struct {
 		name    string
 		primary string
@@ -190,7 +202,7 @@ func TestNormalizeAdditionalEmails(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NormalizeAdditionalEmails(tt.primary, tt.in)
+			got := NormalizeList(tt.primary, tt.in)
 			if len(got) != len(tt.want) {
 				t.Fatalf("got %+v, want %+v", got, tt.want)
 			}

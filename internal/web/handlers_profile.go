@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -53,20 +54,20 @@ func (s *Server) handleAPISwitchProfile(w http.ResponseWriter, r *http.Request) 
 //
 // prev is the profile being edited (config.Profile{} when creating a new
 // one), and every field this form does *not* collect is carried over from it.
-// That matters because Profile has fields reachable only from the CLI
-// (name_variants, previous_addresses, additional_phones) plus date_of_birth,
-// and both callers assign the result over the whole stored struct: building a
-// fresh Profile here silently erased all four the moment anyone edited their
-// city in the web UI, quietly weakening every subsequent removal request with
-// no visible sign. Start from prev, overwrite what the form owns.
+// That matters because both callers assign the result over the whole stored
+// struct: building a fresh Profile here silently erased anything without an
+// input the moment someone edited their city in the web UI, quietly weakening
+// every subsequent removal request with no visible sign. date_of_birth still
+// has no input in the shared partial and relies on exactly this. Start from
+// prev, overwrite what the form owns.
 //
 // Fields the form *does* own are read back unconditionally, so clearing a
 // field in the UI actually clears it. Ownership is decided by whether the
 // input was present in the submission (r.Form) rather than whether it was
 // left blank - an absent input means "this page doesn't edit that field, keep
 // it", while a present-but-empty one means "the user cleared it". Keying off
-// emptiness instead would make additional emails impossible to delete once
-// set, since the old value would resurrect on every save.
+// emptiness instead would make the list fields impossible to empty once set,
+// since the old values would resurrect on every save.
 func buildProfileFromForm(r *http.Request, prev config.Profile) (config.Profile, map[string]string) {
 	// r.FormValue parses on demand but discards the error and, more
 	// importantly here, we need r.Form itself for the presence checks below.
@@ -100,27 +101,129 @@ func buildProfileFromForm(r *http.Request, prev config.Profile) (config.Profile,
 		errors["email"] = "Please enter a valid email address"
 	}
 
-	if _, ok := r.Form["additional_emails"]; ok {
-		// Split before validating, not after: ValidateEmail rejects commas
-		// and semicolons outright, so a whole list handed to it never passes.
-		entries := config.SplitAndTrimAny(r.FormValue("additional_emails"), ",\n\r")
-		var invalid []string
-		for _, e := range entries {
-			if err := email.ValidateEmail(e); err != nil {
-				invalid = append(invalid, e)
-			}
-		}
-		if len(invalid) > 0 {
-			errors["additional_emails"] = "Not a valid email address: " + strings.Join(invalid, ", ")
-			// Keep what the user actually typed so the re-rendered textarea
-			// still shows the entry the error is complaining about.
-			profile.AdditionalEmails = entries
-		} else {
-			profile.AdditionalEmails = config.NormalizeAdditionalEmails(profile.Email, entries)
-		}
-	}
+	// Split before validating, not after: ValidateEmail rejects commas and
+	// semicolons outright, so a whole list handed to it never passes.
+	profile.AdditionalEmails = parseListField(r, errors, listField{
+		name:    "additional_emails",
+		label:   "email addresses",
+		seps:    listSepsWithComma,
+		primary: profile.Email,
+		prev:    prev.AdditionalEmails,
+		validate: func(v string) bool {
+			return email.ValidateEmail(v) == nil
+		},
+		invalidMsg: "Not a valid email address",
+	})
+	profile.NameVariants = parseListField(r, errors, listField{
+		name:  "name_variants",
+		label: "name variants",
+		seps:  listSepsLinesOnly,
+		prev:  prev.NameVariants,
+	})
+	profile.PreviousAddresses = parseListField(r, errors, listField{
+		name:  "previous_addresses",
+		label: "previous addresses",
+		seps:  listSepsLinesOnly,
+		prev:  prev.PreviousAddresses,
+	})
+	profile.AdditionalPhones = parseListField(r, errors, listField{
+		name:    "additional_phones",
+		label:   "phone numbers",
+		seps:    listSepsWithComma,
+		primary: profile.Phone,
+		prev:    prev.AdditionalPhones,
+	})
 
 	return profile, errors
+}
+
+// Separator sets for the profile's list textareas. A comma is only accepted
+// as a separator for fields whose values can never *contain* one: an email
+// address can't (email.ValidateEmail rejects it outright) and neither can a
+// phone number, so accepting both there costs nothing and matches the format
+// the CLI prompts ask for. A street address routinely contains commas
+// ("123 Main St, Riga") and a name variant can ("Smith, John"), so those split
+// on line breaks only - splitting them on commas would quietly shred one
+// entry into bogus fragments and send them to a broker as separate former
+// residences. The CLI draws the same distinction, which is why its addresses
+// prompt is the one that uses a semicolon (see cmd_init.go).
+//
+// Both "\n" and "\r" are separators rather than just "\n". TrimSpace already
+// strips the trailing "\r" a browser's CRLF line ending leaves behind, so
+// that much is handled either way; carrying "\r" is for the rarer input
+// containing a bare CR, which would otherwise survive inside an entry and be
+// written straight into the outgoing email body.
+const (
+	listSepsLinesOnly = "\n\r"
+	listSepsWithComma = ",\n\r"
+)
+
+// Guard rails on the list textareas. These are not format validation (see
+// listField.validate for the one field that has any) - they just stop a
+// pathological paste from reaching an outgoing legal request. Each list
+// renders as a single unwrapped line in the email body, and RFC 5321 caps a
+// line at 998 octets before MTAs may reject or rewrap the message, so an
+// unbounded field is a deliverability problem as well as a config-size one.
+// Real profiles carry a handful of entries; these limits are far above that
+// and only bite on obvious abuse.
+const (
+	maxListEntries  = 25
+	maxListEntryLen = 200
+)
+
+// listField describes one of the profile's list-valued textareas.
+type listField struct {
+	name    string // form field name, also the key used in the errors map
+	label   string // human-readable plural, for error messages
+	seps    string // separator character set, see listSeps* above
+	primary string // value this list must not merely repeat ("" if none)
+	prev    []string
+	// validate reports whether one entry is acceptable. nil means the field
+	// has no format rules - true of everything except email addresses, since
+	// there's no sane canonical form for a name, a street address or an
+	// international phone number, and rejecting a legitimate value would
+	// block someone from exercising a legal right.
+	validate   func(string) bool
+	invalidMsg string
+}
+
+// parseListField reads one list textarea, applying the same presence rule the
+// scalar fields use: an absent input means this page doesn't edit the field,
+// so the previous value is kept; a present-but-empty one means the user
+// cleared it. On any error the raw entries are returned rather than the
+// normalized ones, so the re-rendered textarea still shows the text the error
+// refers to.
+func parseListField(r *http.Request, errors map[string]string, f listField) []string {
+	if _, ok := r.Form[f.name]; !ok {
+		return f.prev
+	}
+
+	entries := config.SplitAndTrimAny(r.FormValue(f.name), f.seps)
+
+	if len(entries) > maxListEntries {
+		errors[f.name] = fmt.Sprintf("Too many %s (%d) - the limit is %d", f.label, len(entries), maxListEntries)
+		return entries
+	}
+	var tooLong, invalid []string
+	for _, e := range entries {
+		if len(e) > maxListEntryLen {
+			tooLong = append(tooLong, e[:40]+"...")
+			continue
+		}
+		if f.validate != nil && !f.validate(e) {
+			invalid = append(invalid, e)
+		}
+	}
+	if len(tooLong) > 0 {
+		errors[f.name] = fmt.Sprintf("Too long (limit %d characters): %s", maxListEntryLen, strings.Join(tooLong, ", "))
+		return entries
+	}
+	if len(invalid) > 0 {
+		errors[f.name] = f.invalidMsg + ": " + strings.Join(invalid, ", ")
+		return entries
+	}
+
+	return config.NormalizeList(f.primary, entries)
 }
 
 // handleSettingsProfileNew adds a second (or third, ...) named profile from

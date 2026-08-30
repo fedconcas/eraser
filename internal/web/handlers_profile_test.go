@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -276,20 +277,25 @@ func postProfileEdit(t *testing.T, s *Server, id string, form url.Values) *httpt
 	return rec
 }
 
-// TestHandleSettingsProfileEditPreservesCLIOnlyFields is the regression test
-// for the silent wipe: buildProfileFromForm used to construct a fresh
-// config.Profile from the ten form inputs, and both write paths assign that
-// over the whole stored struct. Editing your city in the web UI therefore
+// TestHandleSettingsProfileEditPreservesFieldsAbsentFromForm is the
+// regression test for the silent wipe: buildProfileFromForm used to construct
+// a fresh config.Profile from the ten form inputs, and both write paths assign
+// that over the whole stored struct. Editing your city in the web UI therefore
 // erased additional emails, name variants, previous addresses, additional
 // phones and date of birth - weakening every later removal request with no
 // visible sign that anything had been lost.
-func TestHandleSettingsProfileEditPreservesCLIOnlyFields(t *testing.T) {
+//
+// All but date_of_birth now have inputs of their own, so this no longer
+// reflects how the shipped form behaves. It still earns its place: it pins the
+// underlying rule that a field with no input in a submission is carried over
+// rather than zeroed, which is what date_of_birth relies on today and what any
+// future page rendering a subset of the profile form will rely on.
+func TestHandleSettingsProfileEditPreservesFieldsAbsentFromForm(t *testing.T) {
 	s := newTestServer(t, profileWithExtras())
 	s.configPath = filepath.Join(t.TempDir(), "config.yaml")
 
-	// A submission from a form that has no input for any of the extras. The
-	// additional_emails key is absent entirely, standing in for any page that
-	// edits a profile without rendering that textarea.
+	// A submission carrying none of the list inputs, standing in for a page
+	// that edits a profile without rendering them.
 	rec := postProfileEdit(t, s, "spouse", url.Values{
 		"first_name": {"Test"},
 		"last_name":  {"Spouse"},
@@ -429,4 +435,244 @@ func TestHandleSettingsProfileEditRejectsInvalidAdditionalEmail(t *testing.T) {
 	if got := s.getConfig().GetProfiles()[0].AdditionalEmails; len(got) != 2 || got[0] != "old@example.com" {
 		t.Errorf("stored addresses should be untouched on validation failure, got %+v", got)
 	}
+}
+
+// TestProfileEditKeepsCommasInsideAddresses is the anti-corruption test for
+// the separator rule. A street address contains commas as a matter of course,
+// so previous_addresses splits on line breaks only. Splitting it on commas
+// would turn one former residence into three fragments and send them to a
+// broker as separate addresses.
+func TestProfileEditKeepsCommasInsideAddresses(t *testing.T) {
+	s := newTestServer(t, testConfig("spouse"))
+	s.configPath = filepath.Join(t.TempDir(), "config.yaml")
+
+	rec := postProfileEdit(t, s, "spouse", url.Values{
+		"first_name":         {"Test"},
+		"last_name":          {"Spouse"},
+		"email":              {"spouse@example.com"},
+		"previous_addresses": {"123 Main St, San Francisco, CA 94102\n45 Old Road, Riga, LV-1005"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	got := s.getConfig().GetProfiles()[0].PreviousAddresses
+	want := []string{"123 Main St, San Francisco, CA 94102", "45 Old Road, Riga, LV-1005"}
+	if len(got) != len(want) {
+		t.Fatalf("addresses were split on commas: got %d entries %+v, want %d %+v",
+			len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("address %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// Name variants take the same rule for the same reason - "Smith, John" is a
+// plausible way for a broker to have indexed someone.
+func TestProfileEditKeepsCommasInsideNameVariants(t *testing.T) {
+	s := newTestServer(t, testConfig("spouse"))
+	s.configPath = filepath.Join(t.TempDir(), "config.yaml")
+
+	rec := postProfileEdit(t, s, "spouse", url.Values{
+		"first_name":    {"Test"},
+		"last_name":     {"Spouse"},
+		"email":         {"spouse@example.com"},
+		"name_variants": {"Smith, John\nMaris Popens"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rec.Code)
+	}
+
+	got := s.getConfig().GetProfiles()[0].NameVariants
+	if len(got) != 2 || got[0] != "Smith, John" {
+		t.Errorf("name variants were split on commas: %+v", got)
+	}
+}
+
+// Phones may use commas as separators, since a phone number can't contain one.
+func TestProfileEditSavesAdditionalPhones(t *testing.T) {
+	s := newTestServer(t, testConfig("spouse"))
+	s.configPath = filepath.Join(t.TempDir(), "config.yaml")
+
+	rec := postProfileEdit(t, s, "spouse", url.Values{
+		"first_name":        {"Test"},
+		"last_name":         {"Spouse"},
+		"email":             {"spouse@example.com"},
+		"phone":             {"+371 20000000"},
+		"additional_phones": {"+371 20111111\n+1 555 0000, +44 20 7946 0000"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rec.Code)
+	}
+
+	got := s.getConfig().GetProfiles()[0].AdditionalPhones
+	want := []string{"+371 20111111", "+1 555 0000", "+44 20 7946 0000"}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("phone %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// A phone repeating the primary Phone is dropped, the same way an additional
+// email repeating the primary Email is - the templates print both on their
+// own line already.
+func TestProfileEditDropsPhoneMatchingPrimary(t *testing.T) {
+	s := newTestServer(t, testConfig("spouse"))
+	s.configPath = filepath.Join(t.TempDir(), "config.yaml")
+
+	rec := postProfileEdit(t, s, "spouse", url.Values{
+		"first_name":        {"Test"},
+		"last_name":         {"Spouse"},
+		"email":             {"spouse@example.com"},
+		"phone":             {"+371 20000000"},
+		"additional_phones": {"+371 20000000\n+371 20111111"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rec.Code)
+	}
+
+	got := s.getConfig().GetProfiles()[0].AdditionalPhones
+	if len(got) != 1 || got[0] != "+371 20111111" {
+		t.Errorf("expected the duplicate of the primary phone to be dropped, got %+v", got)
+	}
+}
+
+// Each of the three new textareas must clear its field when submitted empty,
+// for the same reason the emails one does: an always-submitted input that
+// preserved on empty could never be emptied from the UI.
+func TestProfileEditClearsEachListField(t *testing.T) {
+	fields := []struct {
+		form string
+		get  func(config.Profile) []string
+	}{
+		{"name_variants", func(p config.Profile) []string { return p.NameVariants }},
+		{"previous_addresses", func(p config.Profile) []string { return p.PreviousAddresses }},
+		{"additional_phones", func(p config.Profile) []string { return p.AdditionalPhones }},
+	}
+
+	for _, f := range fields {
+		t.Run(f.form, func(t *testing.T) {
+			s := newTestServer(t, profileWithExtras())
+			s.configPath = filepath.Join(t.TempDir(), "config.yaml")
+
+			rec := postProfileEdit(t, s, "spouse", url.Values{
+				"first_name": {"Test"},
+				"last_name":  {"Spouse"},
+				"email":      {"spouse@example.com"},
+				f.form:       {"  \n "},
+			})
+			if rec.Code != http.StatusSeeOther {
+				t.Fatalf("expected 303, got %d", rec.Code)
+			}
+			if got := f.get(s.getConfig().GetProfiles()[0].Profile); len(got) != 0 {
+				t.Errorf("submitting an empty %s should clear it, got %+v", f.form, got)
+			}
+			// The other lists, whose inputs weren't in this submission, stay.
+			if got := s.getConfig().GetProfiles()[0].AdditionalEmails; len(got) != 2 {
+				t.Errorf("clearing %s disturbed additional_emails: %+v", f.form, got)
+			}
+		})
+	}
+}
+
+// The stored value has to survive being rendered back into the textarea and
+// resubmitted unchanged - a POST-only test would miss a bad join separator on
+// the render half of the loop.
+func TestProfileEditListFieldsRoundTrip(t *testing.T) {
+	s := newTestServer(t, testConfig("spouse"))
+	s.configPath = filepath.Join(t.TempDir(), "config.yaml")
+
+	const addr = "123 Main St, San Francisco, CA 94102"
+	rec := postProfileEdit(t, s, "spouse", url.Values{
+		"first_name":         {"Test"},
+		"last_name":          {"Spouse"},
+		"email":              {"spouse@example.com"},
+		"previous_addresses": {addr + "\n45 Old Road, Riga, LV-1005"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", rec.Code)
+	}
+
+	// Render the edit form and pull the textarea back out.
+	getReq := withURLParam(httptest.NewRequest(http.MethodGet, "/settings/profiles/spouse/edit", nil), "profileID", "spouse")
+	getRec := httptest.NewRecorder()
+	s.handleSettingsProfileEdit(getRec, getReq)
+	body := getRec.Body.String()
+	if !strings.Contains(body, addr) {
+		t.Fatalf("address not rendered intact into the textarea, body: %s", body)
+	}
+
+	start := strings.Index(body, `name="previous_addresses"`)
+	if start < 0 {
+		t.Fatal("previous_addresses textarea not found")
+	}
+	open := strings.Index(body[start:], ">") + start + 1
+	end := strings.Index(body[open:], "</textarea>") + open
+	rendered := html.UnescapeString(body[open:end])
+
+	// Resubmit exactly what the form would have posted back.
+	rec2 := postProfileEdit(t, s, "spouse", url.Values{
+		"first_name":         {"Test"},
+		"last_name":          {"Spouse"},
+		"email":              {"spouse@example.com"},
+		"previous_addresses": {rendered},
+	})
+	if rec2.Code != http.StatusSeeOther {
+		t.Fatalf("resubmit: expected 303, got %d", rec2.Code)
+	}
+
+	got := s.getConfig().GetProfiles()[0].PreviousAddresses
+	if len(got) != 2 || got[0] != addr {
+		t.Errorf("addresses changed across a render/resubmit round trip: %+v", got)
+	}
+}
+
+func TestProfileEditRejectsOversizedLists(t *testing.T) {
+	s := newTestServer(t, testConfig("spouse"))
+	s.configPath = filepath.Join(t.TempDir(), "config.yaml")
+
+	base := url.Values{
+		"first_name": {"Test"},
+		"last_name":  {"Spouse"},
+		"email":      {"spouse@example.com"},
+	}
+
+	t.Run("too many entries", func(t *testing.T) {
+		form := url.Values{}
+		for k, v := range base {
+			form[k] = v
+		}
+		form["previous_addresses"] = []string{strings.TrimSpace(strings.Repeat("1 Some St, Riga\n", maxListEntries+1))}
+		rec := postProfileEdit(t, s, "spouse", form)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 re-render with an error, got %d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "Too many previous addresses") {
+			t.Errorf("expected an entry-count error, body: %s", rec.Body.String())
+		}
+		if len(s.getConfig().GetProfiles()[0].PreviousAddresses) != 0 {
+			t.Error("nothing should be saved when the list is rejected")
+		}
+	})
+
+	t.Run("entry too long", func(t *testing.T) {
+		form := url.Values{}
+		for k, v := range base {
+			form[k] = v
+		}
+		form["name_variants"] = []string{strings.Repeat("x", maxListEntryLen+1)}
+		rec := postProfileEdit(t, s, "spouse", form)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 re-render with an error, got %d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "Too long") {
+			t.Errorf("expected a length error, body: %s", rec.Body.String())
+		}
+	})
 }
