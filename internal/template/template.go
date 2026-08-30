@@ -135,6 +135,18 @@ func (e *Engine) Render(templateName string, profile config.Profile, b broker.Br
 }
 
 func (e *Engine) getSubject(templateName, brokerName string) string {
+	return RequestSubjectFor(templateName)
+}
+
+// RequestSubjectFor returns the subject line a request sent with this
+// template carries. Every broker gets the same subject for a given template -
+// nothing about the recipient appears in it.
+//
+// Exported because inbox matching reads it back: a reply quoting one of these
+// is a reply to us, which recognises brokers that answer from a helpdesk
+// domain we'd never match on sender alone. Adding a template means adding its
+// subject here (see GenericRequestSubject for the one that needs care).
+func RequestSubjectFor(templateName string) string {
 	switch templateName {
 	case "gdpr":
 		return "GDPR Data Erasure Request - Article 17 Right to Erasure"
@@ -147,8 +159,35 @@ func (e *Engine) getSubject(templateName, brokerName string) string {
 	case "uk-combined":
 		return "Subject Access Request (Art. 15) and Request for Erasure (Art. 17) - UK GDPR"
 	default:
-		return "Personal Data Removal Request"
+		return GenericRequestSubject
 	}
+}
+
+// GenericRequestSubject is the fallback subject, used by the `generic`
+// template and by any unrecognised name.
+//
+// It's called out separately because it's the weak one for reply matching:
+// four ordinary words that a privacy newsletter or a competitor's marketing
+// mail can contain verbatim, unlike the other five which name an article of
+// the GDPR. Matching on it is only sound for someone who actually sends the
+// generic template, which is why the matcher derives its subject set from the
+// templates this install has really used rather than from all of them.
+const GenericRequestSubject = "Personal Data Removal Request"
+
+// RequestSubjects returns the subject lines for the named templates, skipping
+// duplicates and unknown names.
+func RequestSubjects(templateNames []string) []string {
+	seen := make(map[string]bool, len(templateNames))
+	var subjects []string
+	for _, name := range templateNames {
+		s := RequestSubjectFor(name)
+		if seen[s] {
+			continue
+		}
+		seen[s] = true
+		subjects = append(subjects, s)
+	}
+	return subjects
 }
 
 // RequestTypeFor reports which right a template exercises. Unknown templates

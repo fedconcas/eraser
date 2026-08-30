@@ -56,4 +56,30 @@ There is deliberately **no** `priority` key in `config.yaml`. Priority is a per-
 
 Note that `send` orders high-priority brokers first within a run regardless of `--priority`. That only matters when `daily_send_limit` truncates the run: the cap then spends its budget on the brokers that matter most, and the rest go out on the next run. Nobody is dropped, and ordering within a priority band still follows `data/brokers.yaml`.
 - `inbox` - IMAP settings, for `monitor`/`pipeline`/the web UI's inbox scan (shared across all profiles - see [multi-profile.md](multi-profile.md#shared-inbox))
+
+  | key | meaning |
+  |---|---|
+  | `folder` | primary mailbox to scan (default `INBOX`) |
+  | `archive_folder` | where processed broker replies are moved (default `Eraser`); created on demand |
+  | `auto_archive` | move processed replies out of their source mailbox into `archive_folder` |
+  | `scan_spam` | also scan the spam/junk mailbox (off by default) |
+  | `spam_folder` | override which mailbox that is; empty means discover the one advertising `\Junk` |
+
+  **Before turning on `auto_archive`, run `eraser monitor --dry-run`.** It lists every message a
+  real run would move, with sender and subject, and moves nothing. A count alone is not a check:
+  broker matching keys off the sender's domain, and it only takes one over-broad entry in
+  `brokers.yaml` for ordinary mail to be swept up. Read the senders.
+
+  Inbox matching only recognises replies from brokers you have actually sent a request to, so
+  **clearing your send history also stops replies to those requests being recognised** - Settings >
+  Danger Zone > "Clear All History" empties the same table the matcher reads. The scan then reports
+  a quiet inbox rather than an error; `monitor` and the web scan both note it when there are no
+  sent requests on record.
+
+  With `scan_spam` on, replies found in spam are moved out of it, which on Gmail also clears their
+  spam status - but only replies that could be **attributed** to a specific broker. A reply
+  recognised solely by the request subject it quotes is recorded and flagged for review, and left
+  in spam: the subject is chosen by whoever sent the message, so on its own it must not be enough
+  to pull mail out of the one folder where forged senders are expected. Gmail may keep filing *future* replies as spam - a Gmail-side filter is the durable
+  fix. Note Gmail purges spam after 30 days, so the rescue window is bounded regardless of `--days`.
 - `pipeline` - browser automation settings for `fill`

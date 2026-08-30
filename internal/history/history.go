@@ -595,6 +595,110 @@ func (s *Store) ResolveProfileForBroker(brokerID string) (string, error) {
 	return normalizeProfileID(profileID.String), nil
 }
 
+// ContactedBrokerIDs returns the set of brokers this install has actually
+// sent a removal request to, across every profile.
+//
+// It exists to gate inbox classification: matching an incoming email to a
+// broker on its sender domain alone is far too loose to act on, because the
+// broker database maps general-purpose domains. `google-search-removal` has
+// no contact address and a website of google.com, and seven brokers list
+// @gmail.com contact addresses - so every Google notification and every mail
+// from any Gmail user was being recorded as a "broker response". With
+// auto-archive on, that would have moved ordinary correspondence out of the
+// inbox on every scan.
+//
+// A broker we never wrote to cannot be replying to us, so requiring a prior
+// request is both the strictest and the most obviously correct filter.
+// Deliberately not scoped to one profile: a shared inbox receives replies for
+// every profile, the same reason ResolveProfileForBroker looks across all of
+// them.
+func (s *Store) ContactedBrokerIDs() (map[string]bool, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT broker_id FROM removal_requests`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contacted brokers: %w", err)
+	}
+	defer rows.Close()
+
+	contacted := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan contacted broker: %w", err)
+		}
+		if id != "" {
+			contacted[id] = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read contacted brokers: %w", err)
+	}
+	return contacted, nil
+}
+
+// SentTemplates returns the distinct templates this install has actually sent
+// requests with.
+//
+// Inbox matching recognises a reply by the request subject it quotes, and the
+// subject is a function of the template. Deriving the set from what was really
+// sent - rather than from every template that exists - keeps the weakest
+// subject ("Personal Data Removal Request", four generic words) out of the
+// matcher for the great majority of users, who never send the generic
+// template. Same principle as ContactedBrokerIDs: don't match on something we
+// didn't do.
+func (s *Store) SentTemplates() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT template FROM removal_requests WHERE template != ''`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sent templates: %w", err)
+	}
+	defer rows.Close()
+
+	var templates []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, fmt.Errorf("failed to scan sent template: %w", err)
+		}
+		templates = append(templates, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read sent templates: %w", err)
+	}
+	return templates, nil
+}
+
+// ContactedBrokerAddresses maps each address we sent a request to onto the
+// broker it belongs to (lowercased).
+//
+// This is what lets a reply be attributed when it arrives from somewhere we'd
+// never recognise - a Zendesk or Jira tenant, or a parent company. Such a
+// reply is nearly always an auto-acknowledgement that quotes the message it's
+// answering, so the address we originally wrote to appears in its body.
+// Finding one there identifies the broker far more precisely than guessing
+// from the sender's domain.
+func (s *Store) ContactedBrokerAddresses() (map[string]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT email, broker_id FROM removal_requests WHERE email != ''`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contacted addresses: %w", err)
+	}
+	defer rows.Close()
+
+	addrs := make(map[string]string)
+	for rows.Next() {
+		var email, brokerID string
+		if err := rows.Scan(&email, &brokerID); err != nil {
+			return nil, fmt.Errorf("failed to scan contacted address: %w", err)
+		}
+		if email == "" || brokerID == "" {
+			continue
+		}
+		addrs[strings.ToLower(strings.TrimSpace(email))] = brokerID
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read contacted addresses: %w", err)
+	}
+	return addrs, nil
+}
+
 type BrokerStatus struct {
 	BrokerID  string
 	LastSent  time.Time
