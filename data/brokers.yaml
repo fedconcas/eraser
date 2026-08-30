@@ -502,7 +502,7 @@ brokers:
       priority: low
     - id: adrea-rubin-marketing
       name: Adrea Rubin Marketing, Inc.
-      email: ""
+      email: privacy@adrearubin.com
       notes: Email jenniferv@adrearubin.com hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.adrearubin.com/
       description: Marketing data and lead generation services
@@ -725,7 +725,7 @@ brokers:
       notes: Clearbit (Apihub) is now part of HubSpot - privacy@clearbit.com redirected DSRs to HubSpot's preference center above (marketing opt-outs at hubspot.com/hubspot-privacy-preferences) (reply received 2026-08-20).
     - id: apollo-interactive
       name: APOLLO INTERACTIVE LLC
-      email: ""
+      email: requests@apollointeractive.com
       website: https://www.apollointeractive.com/
       opt_out_url: https://www.apollointeractive.com/data-rights.php
       description: B2B contact database and sales prospecting data platform
@@ -759,7 +759,7 @@ brokers:
       priority: medium
     - id: arrakis-technologies
       name: Arrakis Technologies Corp.
-      email: ""
+      email: privacy@arrakis.ai
       website: https://www.arrakis.ai/
       opt_out_url: https://www.arrakis.ai/optout
       description: Healthcare sales and marketing software and data platform
@@ -808,7 +808,7 @@ brokers:
       priority: high
     - id: atlantic-fox-technologies
       name: Atlantic Fox Technologies, Inc.
-      email: ""
+      email: privacy@atlanticfox.com
       website: https://www.atlanticfox.com/
       description: Enterprise data infrastructure and identity resolution platform
       region: us
@@ -1090,7 +1090,7 @@ brokers:
       priority: medium
     - id: buildertrend-solutions
       name: Buildertrend Solutions, Inc.
-      email: ""
+      email: privacy@buildertrend.com
       website: https://www.buildertrend.com/
       description: Construction project management and contractor lead generation
       region: us
@@ -1165,7 +1165,7 @@ brokers:
       priority: low
     - id: careerbuilder
       name: Careerbuilder, LLC
-      email: ""
+      email: riskandcompliance@careerbuilder.com
       website: https://www.careerbuilder.com/
       description: Employment job board and candidate profile data platform
       region: us
@@ -1175,7 +1175,7 @@ brokers:
       notes: 'privacy@careerbuilder.com bounced; no working email found. CareerBuilder privacy requests now route through Monster''s web form. Updated 2026-08-20.'
     - id: car-market-solutions
       name: Car Market Solutions LLC
-      email: ""
+      email: solutions@carmarketsolutions.com
       notes: Email ben@carmarketsolutions.com hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.carmarketsolutions.com/
       description: Automotive lead generation and market data for dealerships
@@ -1184,7 +1184,7 @@ brokers:
       priority: low
     - id: carry-technologies
       name: Carry Technologies, Inc
-      email: ""
+      email: datadeletion@hightouch.com
       website: https://www.hightouch.com/
       opt_out_url: https://preferences.hightouch.com
       description: Data activation platform syncing warehouse data to SaaS applications
@@ -1211,7 +1211,7 @@ brokers:
       priority: low
     - id: catalyze-ai
       name: Catalyze Ai, Inc
-      email: ""
+      email: privacy@catalyzeai.com
       website: https://www.catalyzeai.com/
       opt_out_url: https://www.catalyzeai.com/opt-out
       description: Predictive analytics lead-generation platform for financial services
@@ -1277,7 +1277,7 @@ brokers:
       notes: Doesn't process removal requests via email - use the privacy request form at the opt_out_url.
     - id: civis-analytics
       name: Civis Analytics, Inc
-      email: ""
+      email: dataprotection@civisanalytics.com
       website: https://www.civisanalytics.com/
       opt_out_url: https://www.civisanalytics.com/privacy-policy/supplemental-privacy-notice/
       description: Data science and voter analytics platform for political campaigns
@@ -1700,7 +1700,7 @@ brokers:
       priority: low
     - id: datonics
       name: Datonics, LLC
-      email: ""
+      email: privacy@datonics.com
       website: https://www.datonics.com/
       opt_out_url: https://www.datonics.com/privacy/privacy-choices
       description: Audience data aggregator for targeting and CRM enrichment
@@ -1823,7 +1823,7 @@ brokers:
       priority: medium
     - id: digicenter
       name: Digicenter, LLC.
-      email: ""
+      email: privacy@digicenter.com
       notes: 'Opt-out form (via the same collectivedata.io platform as collective-data-solutions) requires a Mobile Advertising ID; explicitly says not to enter a phone number.'
       website: https://www.digicenter.com/
       opt_out_url: https://www.collectivedata.io/opt-out-do-not-sell-request-process/
@@ -1841,7 +1841,7 @@ brokers:
       priority: medium
     - id: digital-safety-products
       name: Digital Safety Products, LLC
-      email: ""
+      email: privacy@spyfly.com
       website: https://www.spyfly.com/
       description: People-search site with background checks and public records data
       region: us
@@ -1975,7 +1975,7 @@ brokers:
       notes: 'Rebranded as Lightcast; use the privacy request form at opt_out_url instead of email - form is the required removal path per user.'
     - id: edvisors-network
       name: Edvisors Network, Inc.
-      email: ""
+      email: privacy@edvisors.com
       website: https://www.edvisors.com/
       opt_out_url: https://www.edvisors.com/third-party-opt-out/
       description: Student loan comparison and financial education platform
@@ -2123,7 +2123,7 @@ brokers:
       priority: medium
     - id: consumerbase
       name: Consumerbase LLC
-      email: ""
+      email: privacy@exactdata.com
       website: https://www.exactdata.com/
       opt_out_url: https://www.data-axle.com/do-not-sell-my-data/
       description: Direct mail list provider with consumer and business contact data
@@ -2149,7 +2149,7 @@ brokers:
       priority: low
     - id: exponential-interactive
       name: Exponential Interactive, Inc.
-      email: ""
+      email: privacy@vdx.tv
       notes: 'Privacy policy: data is "completely anonymized and de-identified" - can''t honor requests requiring identification of a specific person/device; wants a tribalfusion.com ANON_ID cookie value instead.'
       website: https://www.vdx.tv/
       opt_out_url: https://www.vdx.tv/policies/privacy#opting-out
@@ -2207,7 +2207,7 @@ brokers:
       priority: low
     - id: fideo-intelligence
       name: Fideo Intelligence, Inc.
-      email: ""
+      email: privacy@fideo.ai
       website: https://www.fideo.ai/
       opt_out_url: https://app.fideo.ai/your-privacy-choices/
       description: Identity and network intelligence platform for fraud prevention
@@ -2379,7 +2379,7 @@ brokers:
       priority: low
     - id: fullcontact
       name: Fullcontact, Inc.
-      email: ""
+      email: privacy@fullcontact.com
       notes: 'Reply says identity must be verified via their Privacy Choices portal before they''ll act on the request (2026-08-21).'
       website: https://www.fullcontact.com/
       opt_out_url: https://platform.fullcontact.com/your-privacy-choices
@@ -2718,7 +2718,7 @@ brokers:
       priority: low
     - id: hybrid-theory
       name: Hybrid Theory
-      email: ""
+      email: dpo@azerion.com
       website: https://www.hybridtheory.com/
       opt_out_url: https://www.hybridtheory.com/opt-out/
       description: Cookie-based audience data and device ID matching platform for ad targeting
@@ -2744,7 +2744,7 @@ brokers:
       priority: medium
     - id: idengine
       name: Idengine LLC
-      email: ""
+      email: contact@idengine.ai
       notes: Email chad@idengine.ai hard-bounced (2026-08-23) - domain has no working mail server (DNS MX lookup failed).
       website: https://www.idengine.com/
       opt_out_url: https://idengine.com/dnsmpi/
@@ -2777,7 +2777,7 @@ brokers:
       priority: medium
     - id: imprint-analytics
       name: Imprint Analytics LLC
-      email: ""
+      email: privacy@imprintanalytics.io
       website: https://www.imprintanalytics.io/
       opt_out_url: https://imprintanalytics.io/limit-the-use-of-my-sensitive-personal-information/
       description: Advertising audience data and marketing analytics platform for publishers
@@ -2809,7 +2809,7 @@ brokers:
       priority: medium
     - id: infinite-knot
       name: Infinite Knot Inc.
-      email: ""
+      email: support@contacts411.com
       notes: Email barrygold@contacts411.com hard-bounced (2026-08-23) - domain has no working mail server (DNS MX lookup failed).
       website: https://www.contacts411.com/
       opt_out_url: https://www.contacts411.com/opt-out
@@ -2896,7 +2896,7 @@ brokers:
       notes: security@infutor.com replied that this mailbox can't process DSRs at all; use the form or call 1-866-207-1399 (reply received 2026-08-20).
     - id: inmarket-media
       name: Inmarket Media LLC
-      email: ""
+      email: privacy@inmarket.com
       website: https://www.inmarket.com/
       opt_out_url: https://www.inmarket.com/opt-out/
       description: Location-based marketing and consumer behavior tracking platform
@@ -3142,7 +3142,7 @@ brokers:
       notes: 'Domain jverify.com is parked/for sale on GoDaddy (checked 2026-08-20) - company defunct.'
     - id: kargo-global
       name: Kargo Global LLC
-      email: ""
+      email: privacyinfo@kargo.com
       website: https://www.kargo.com/
       opt_out_url: https://www.kargo.com/privacy-portal
       description: Omnichannel advertising platform for mobile, CTV and social targeting and brand campaigns
@@ -3321,7 +3321,7 @@ brokers:
       notes: 'postmaster@leadmemedia.com bounced: "couldn''t be forwarded from texasregistry@leadmemedia.com to another email address" - forwarding is broken; opt_out_url already on file as fallback (reply received 2026-08-20).'
     - id: leadpost
       name: Leadpost, LLC
-      email: ""
+      email: privacy@leadpost.com
       website: https://www.leadpost.com/
       description: Website visitor identification platform capturing anonymous visitor data for retargeting
       region: us
@@ -3653,7 +3653,7 @@ brokers:
       priority: medium
     - id: maxmind
       name: MAXMIND Inc
-      email: ""
+      email: privacy@maxmind.com
       website: https://www.maxmind.com/
       opt_out_url: https://www.maxmind.com/en/data-deletion-and-verification
       description: IP geolocation and fraud detection data provider for content customization and security
@@ -3769,7 +3769,7 @@ brokers:
       notes: Merkle is a dentsu brand for privacy-request purposes (confirmed via dentsu's privacy request form, which lists Merkle as a selectable brand) - contact routed to the group DPO rather than an individual employee address. The separate dentsu-inc entry was merged into this one.
     - id: message-digital
       name: MESSAGE DIGITAL LLC
-      email: ""
+      email: privacy@messagedigital.com
       notes: Auto-reply says privacy requests "must be submitted through our Privacy Request form... or by calling +1 (888)..." (2026-08-21), not email - use the opt_out_url form instead.
       website: https://www.messagedigital.com/
       opt_out_url: https://www.messagedigital.com/my-data
@@ -3851,7 +3851,7 @@ brokers:
       priority: low
     - id: modigie
       name: Modigie Inc.
-      email: ""
+      email: support@modigie.com
       notes: Email privacy@modigie.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.modigie.com/
       opt_out_url: https://privacyportal.onetrust.com/webform/4a8e10dc-2293-42ea-ad06-886bc22167a6/20341940-11c2-4c43-9b64-194e952203fd
@@ -4976,7 +4976,7 @@ brokers:
       priority: low
     - id: saha-ventures
       name: Saha Ventures LLC
-      email: ""
+      email: ops@findtrueowner.com
       notes: Email harmik@propertyownerlookup.io hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.findtrueowner.com/
       description: Property owner contact information database for real estate professionals and investors
@@ -5007,7 +5007,7 @@ brokers:
       priority: low
     - id: free-stream-media
       name: Free Stream Media Corp.
-      email: ""
+      email: privacy@samba.tv
       website: https://www.samba.tv/
       opt_out_url: 'https://privacyportal-cdn.onetrust.com/dsarwebform/87c5ee85-893d-4972-ba26-2e82b743d041/d84d9664-facb-4de3-85fd-a2e339b73dbf.html'
       description: Audience data collection and targeting for broadcast TV and streaming advertising
@@ -5033,7 +5033,7 @@ brokers:
       priority: low
     - id: scalable-commerce
       name: Scalable Commerce, LLC
-      email: ""
+      email: privacy@kidslivesafe.com
       website: https://www.kidslivesafe.com/
       opt_out_url: https://www.kidslivesafe.com/help-center/privacy-requests
       description: Public record search service for names, addresses, phone numbers
@@ -5175,7 +5175,7 @@ brokers:
       priority: low
     - id: similarweb
       name: Similarweb Ltd.
-      email: ""
+      email: legal@similarweb.com
       website: https://www.similarweb.com/
       opt_out_url: https://similarweb.privacy.saymine.io/similarweb
       description: Website analytics and traffic data for competitive intelligence and market research
@@ -5277,7 +5277,7 @@ brokers:
       priority: low
     - id: sourcescrub
       name: Sourcescrub LLC
-      email: ""
+      email: privacy@sourcescrub.com
       notes: Email dataprivacy@sourcescrub.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.sourcescrub.com/
       opt_out_url: https://www.sourcescrub.com/legal/do-not-sell-my-personal-information
@@ -5506,7 +5506,7 @@ brokers:
       priority: low
     - id: swoopcom
       name: Swoop.Com, Inc.
-      email: ""
+      email: privacyrights@swoop.com
       notes: 'Auto-reply points to their Privacy Choices form (2026-08-21); appeals go to privacyrights@swoop.com.'
       website: https://www.swoop.com/
       opt_out_url: https://swoop.com/your-privacy-choices/
@@ -5523,7 +5523,7 @@ brokers:
       priority: low
     - id: amplemarket
       name: Amplemarket
-      email: ""
+      email: privacy@amplemarket.com
       website: https://www.amplemarket.com/
       opt_out_url: https://www.amplemarket.com/legal/do-not-sell-my-info
       description: B2B sales prospecting platform; business contact database for lead generation
@@ -5961,7 +5961,7 @@ brokers:
       priority: medium
     - id: videoamp
       name: Videoamp, Inc.
-      email: ""
+      email: CCPAPrivacy@VideoAmp.com
       notes: 'Consumer rights page requires a device/advertising identifier to locate and act on a request; no name/email-only path offered.'
       website: https://www.videoamp.com/
       opt_out_url: https://www.videoamp.com/consumer-rights-under-ccpa
@@ -6088,7 +6088,7 @@ brokers:
       priority: low
     - id: wiland
       name: Wiland Inc
-      email: ""
+      email: privacy@wiland.com
       website: https://www.wiland.com/
       opt_out_url: https://wiland.com/privacy-choices/#how-to-submit-privacy-choices
       description: Consumer intelligence platform with predictive marketing data from spending and engagement signals
@@ -6124,7 +6124,7 @@ brokers:
       priority: medium
     - id: wiza
       name: Wiza, Inc.
-      email: ""
+      email: hello@wiza.co
       notes: 'Reply says to submit removal via this form instead of email (2026-08-21).'
       website: https://www.wiza.co/
       opt_out_url: https://wiza.co/optout-contact-info
@@ -6149,7 +6149,7 @@ brokers:
       priority: low
     - id: xad
       name: Xad, Inc.
-      email: ""
+      email: privacyrights@groundtruth.com
       notes: 'GroundTruth (Xad''s current brand) consumer-rights page requires a device/advertising identifier; no name/email-only path offered.'
       website: https://www.groundtruth.com/
       opt_out_url: https://www.groundtruth.com/privacy-rights/
@@ -6444,7 +6444,7 @@ brokers:
       priority: high
     - id: peoplesearchnow
       name: PeopleSearchNow
-      email: ""
+      email: privacy@peoplesearchnow.com
       website: https://www.peoplesearchnow.com
       opt_out_url: https://www.peoplesearchnow.com/opt-out
       description: People-search site publishing names, addresses, phone numbers
@@ -6461,7 +6461,7 @@ brokers:
       priority: high
     - id: usa-people-search
       name: USA People Search
-      email: ""
+      email: support@usa-people-search.com
       website: http://usa-people-search.com
       opt_out_url: https://www.usa-people-search.com/manage
       description: People-search site offering personal records and contact information
@@ -6514,6 +6514,7 @@ brokers:
     - id: unitedstatesphonebook
       name: United States Phone Book
       email: ""
+      notes: 'Fronts the same service as the `usphonebook` entry, which carries info@usphonebook.com and is the one to write to. Left address-less so a run does not contact usphonebook.com twice.'
       website: http://www.unitedstatesphonebook.com
       opt_out_url: https://www.unitedstatesphonebook.com/contact.php
       description: Phone number directory and people-search service
@@ -6580,7 +6581,7 @@ brokers:
       priority: high
     - id: findpeoplesearch
       name: FindPeopleSearch
-      email: ""
+      email: support@findpeoplesearch.com
       website: https://findpeoplesearch.com
       opt_out_url: https://www.findpeoplesearch.com/customerservice/
       description: People-search service offering background checks and personal records
@@ -6614,7 +6615,7 @@ brokers:
       priority: medium
     - id: archives
       name: Archives.com
-      email: ""
+      email: support@archives.com
       website: https://archives.com
       opt_out_url: https://www.archives.com/?_act=Optout
       description: Historical records and genealogy search database
@@ -6631,7 +6632,7 @@ brokers:
       priority: medium
     - id: pimeyes
       name: PimEyes
-      email: ""
+      email: privacy@pimeyes.com
       website: https://pimeyes.com
       opt_out_url: https://pimeyes.com/en/opt-out-request-form
       description: Reverse face-search engine for finding images of individuals online
