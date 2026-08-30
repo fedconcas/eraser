@@ -439,6 +439,52 @@ func TestTicketPatterns(t *testing.T) {
 	}
 }
 
+// TestB2BOnlyBeatsQuotedAccessRequestSubject is a regression test against a
+// real reply. DemandScience answered an Article 15 request with three
+// separate statements that it holds no consumer data whatsoever - and the
+// classifier filed it as a `disclosure`, because subjectDisclosurePatterns
+// awards +3 for the words "Subject Access Request" appearing in the subject
+// line. That subject is the one *we* sent; the broker is only quoting it
+// back, so it carries no information about what the reply says. This is why
+// b2bOnlyPatterns are weighted above it.
+//
+// Body and subject are copied verbatim from the stored response, wrapped as
+// they arrived - which is also why the patterns have to tolerate a line
+// break in the middle of a clause.
+func TestB2BOnlyBeatsQuotedAccessRequestSubject(t *testing.T) {
+	email := &Email{
+		Subject: "Re: Subject Access Request - Article 15 UK GDPR",
+		Body: `Hello,
+
+Thank you for contacting DemandScience regarding your privacy rights.
+
+DemandScience operates strictly within a business-to-business (B2B)
+context. Our platform exclusively processes Business Contact Information
+(BCI) such as corporate email addresses, job titles, and company
+affiliations.
+
+Because of our B2B data architecture, our systems do not ingest, process,
+or store personal consumer data, including personal email domains (such as @
+gmail.com, @yahoo.com, or @icloud.com), personal phone numbers, or
+residential addresses. As a result, we do not hold consumer records
+associated with personal identifiers.
+
+If you believe we may hold a professional profile for you under a corporate
+email address, wish to suppress a specific business domain, or would like
+us to suppress your public LinkedIn profile URL, please reply with those
+business details so we can add them to our internal suppression list.
+Otherwise, no further action is required, and this request is now complete.
+
+Kind regards,
+Global Privacy Operations`,
+	}
+
+	got := ClassifyResponse(email)
+	if got.Type != ResponseB2BOnly {
+		t.Errorf("ClassifyResponse() = %q, want %q (reason: %s)", got.Type, ResponseB2BOnly, got.Reason)
+	}
+}
+
 // TestB2BOnlySeparateFromRejection pins the distinction the two types
 // encode. "No record of you" is a per-user result and must stay a
 // rejection; "we are B2B-only" is a permanent property of the company and

@@ -235,6 +235,25 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 			pipelineStatus = history.PipelineAwaitingResponse
 		case inbox.ResponseDisclosure:
 			pipelineStatus = history.PipelineDisclosureReceived
+		case inbox.ResponseB2BOnly:
+			// A refusal, and a permanent one - the company says it holds no
+			// consumer data at all. Recorded as rejected here; acting on it
+			// means tagging the broker b2b-only in brokers.yaml, which is a
+			// data edit and stays a human decision (see the hint printed by
+			// printClassifiedResponse).
+			pipelineStatus = history.PipelineRejected
+		case inbox.ResponseBounced:
+			// Used to fall through to awaiting_response, so a request whose
+			// address is dead sat in the pipeline looking like one still
+			// waiting for an answer. It is not: nothing will ever arrive.
+			//
+			// Deliberately does NOT call store.MarkFailed. That clears the
+			// 25-day resend cooldown, and re-sending to an address the MTA
+			// just rejected is the one thing you don't want a scan to set up
+			// automatically. `cleanup-bounces` and `mark-bounced` are the
+			// commands that make that change, with the address cleared from
+			// brokers.yaml in the same motion.
+			pipelineStatus = history.PipelineFailed
 		default:
 			pipelineStatus = history.PipelineAwaitingResponse
 		}
@@ -349,6 +368,10 @@ func printClassifiedResponse(r inbox.ClassifiedResponse) {
 		icon = "⏳"
 	case inbox.ResponseDisclosure:
 		icon = "📄"
+	case inbox.ResponseB2BOnly:
+		icon = "🏢"
+	case inbox.ResponseBounced:
+		icon = "📭"
 	default:
 		icon = "❓"
 	}
@@ -365,6 +388,21 @@ func printClassifiedResponse(r inbox.ClassifiedResponse) {
 	if r.Type == inbox.ResponseDisclosure {
 		fmt.Printf("   📄 Subject access response - read this before erasing. Look for the\n")
 		fmt.Printf("      source they got your data from and the recipients they sold it to.\n")
+	}
+	// Both of these need a data edit that this scan deliberately doesn't
+	// make for you - say which command makes it, or the classification is
+	// just a line of output that scrolls past.
+	if r.Type == inbox.ResponseB2BOnly {
+		fmt.Printf("   🏢 Says it holds no consumer data at all. If that checks out, tag it so\n")
+		fmt.Printf("      nothing is ever sent again: add `tags: [b2b-only]` to %s in\n", r.Email.BrokerID)
+		fmt.Printf("      data/brokers.yaml, with a note quoting the reply.\n")
+	}
+	if r.Type == inbox.ResponseBounced {
+		fmt.Printf("   📭 Delivery failed - nothing will arrive. Run `eraser cleanup-bounces` to\n")
+		fmt.Printf("      find a replacement address, or `eraser mark-bounced %s` to record it.\n", r.Email.BrokerID)
+		if r.BouncedRecipient != "" {
+			fmt.Printf("      Dead address: %s\n", r.BouncedRecipient)
+		}
 	}
 	if r.NeedsReview {
 		fmt.Printf("   ⚠️  Confidence: %.0f%% - manual review recommended\n", r.Confidence*100)
