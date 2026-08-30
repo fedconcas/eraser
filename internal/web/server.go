@@ -186,6 +186,13 @@ func limitFormBody(w http.ResponseWriter, r *http.Request) {
 
 // parseTemplates loads and parses all HTML templates
 // Each page gets its own template set to avoid "content" block conflicts
+// partialSource is a partial template plus the name it is registered under,
+// so pages can invoke it by file name.
+type partialSource struct {
+	name    string
+	content string
+}
+
 func (s *Server) parseTemplates() (map[string]*template.Template, error) {
 	funcs := template.FuncMap{
 		"formatTime": func(t time.Time) string {
@@ -215,7 +222,7 @@ func (s *Server) parseTemplates() (map[string]*template.Template, error) {
 	}
 
 	// Read all partial templates
-	var partials []string
+	var partials []partialSource
 	partialTemplates := make(map[string]string)
 	err = fs.WalkDir(templatesFS, "templates/partials", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".html") {
@@ -225,9 +232,9 @@ func (s *Server) parseTemplates() (map[string]*template.Template, error) {
 		if err != nil {
 			return err
 		}
-		partials = append(partials, string(content))
-		// Also save for standalone partial templates
 		name := path[len("templates/"):]
+		partials = append(partials, partialSource{name: name, content: string(content)})
+		// Also save for standalone partial templates
 		partialTemplates[name] = string(content)
 		return nil
 	})
@@ -266,9 +273,23 @@ func (s *Server) parseTemplates() (map[string]*template.Template, error) {
 			return fmt.Errorf("failed to parse layout for %s: %w", name, err)
 		}
 
-		// Parse partials
+		// Parse partials, each under its own file name, so a page can invoke
+		// one as {{template "partials/x.html" .}}. Parsing them into the
+		// page's namespace anonymously (the old behaviour) left them
+		// unresolvable by name, which is why the broker table existed as two
+		// hand-duplicated copies - this file and partials/broker-list.html -
+		// that had to be edited in lockstep.
+		//
+		// A partial that wraps itself in {{define "name"}} still works: the
+		// define simply overrides the entry created here. Note the trap that
+		// creates - if a partial defines a name DIFFERENT from its file name
+		// (partials/profile-fields.html does, deliberately), then its
+		// file-named entry is empty, and renderPartial on it would emit
+		// nothing at all rather than failing. Only renderPartial a partial
+		// that has no define, or one whose define matches its file name
+		// (partials/template-preview.html).
 		for _, partial := range partials {
-			_, err = pageTmpl.Parse(partial)
+			_, err = pageTmpl.New(partial.name).Parse(partial.content)
 			if err != nil {
 				return fmt.Errorf("failed to parse partial for %s: %w", name, err)
 			}

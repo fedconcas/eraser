@@ -16,6 +16,7 @@ const (
 	ResponsePending              ResponseType = "pending"               // Processing, will follow up
 	ResponseBounced              ResponseType = "bounced"               // Email bounced - invalid address
 	ResponseDisclosure           ResponseType = "disclosure"            // Article 15 subject access response - contains your data, read it
+	ResponseB2BOnly              ResponseType = "b2b_only"              // Company holds no consumer data at all - never write again
 	ResponseUnknown              ResponseType = "unknown"               // Needs manual review
 )
 
@@ -104,7 +105,6 @@ var (
 		// Additional rejection patterns from real emails
 		regexp.MustCompile(`(?i)(we\s+)?(have\s+)?no\s+data\s+(linked|associated|related)\s+to\s+(your|this)`),
 		regexp.MustCompile(`(?i)not\s+identified\s+in\s+our\s+database`),
-		regexp.MustCompile(`(?i)(we\s+are|we're)\s+a\s+b2b\s+(platform|company|business)`),
 		regexp.MustCompile(`(?i)has\s+never\s+existed\s+in\s+our\s+database`),
 		regexp.MustCompile(`(?i)consumer\s+reporting\s+agenc(y|ies)\s+(is|are)\s+exempt`),
 		regexp.MustCompile(`(?i)fair\s+credit\s+reporting\s+act.{0,30}exempt`),
@@ -114,6 +114,33 @@ var (
 		regexp.MustCompile(`(?i)(this\s+)?(email|inbox)\s+(address\s+)?(is\s+)?not\s+(a\s+)?(mechanism|intended)\s+(for|to)`),
 		regexp.MustCompile(`(?i)not\s+intended\s+for\s+(the\s+)?(submission|handling)\s+of\s+privacy`),
 		regexp.MustCompile(`(?i)will\s+not\s+be\s+considered\s+a\s+valid\s+submission`),
+	}
+
+	// B2B-only indicators. Deliberately NOT part of rejectionPatterns, even
+	// though such a reply is also a refusal. The two facts are different in
+	// kind and have different consequences:
+	//
+	//   "we have no record of you"  - a per-user, per-moment result. For a
+	//                                 credit agency it is exactly what a
+	//                                 working erasure campaign produces, and
+	//                                 says nothing about the company.
+	//   "we are B2B-only"           - a permanent property of the company.
+	//                                 Nobody's personal data is held, so no
+	//                                 request will ever succeed.
+	//
+	// Only the second justifies tagging the broker b2b-only and stopping all
+	// future sends (see broker.TagB2BOnly). Folding it into "rejected", as
+	// this pattern used to be, meant a broker that simply had nothing on
+	// file this month was indistinguishable from one that never holds
+	// consumer data - and tagging off that signal would silently drop live
+	// targets out of every future campaign.
+	b2bOnlyPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)(we\s+are|we're)\s+an?\s+b?2?b?\s*(business[\s-]to[\s-]business|b2b)\s*(platform|company|business|service|provider)?`),
+		regexp.MustCompile(`(?i)we\s+(only\s+)?(work|deal|engage)\s+(only\s+)?with\s+(businesses|companies|corporate\s+clients)`),
+		regexp.MustCompile(`(?i)(we\s+)?do\s+not\s+(collect|hold|process|store)\s+(any\s+)?(personal\s+)?(data|information)\s+(about|on|of)\s+(consumers|individuals|private\s+individuals)`),
+		regexp.MustCompile(`(?i)our\s+(clients|customers|services)\s+are\s+(exclusively\s+|only\s+)?(businesses|companies|b2b)`),
+		regexp.MustCompile(`(?i)we\s+are\s+not\s+a\s+(consumer|data)\s+broker`),
+		regexp.MustCompile(`(?i)(we\s+)?(only\s+)?(hold|process)\s+business\s+contact\s+(data|information)`),
 	}
 
 	// Pending indicators
@@ -309,6 +336,7 @@ func ClassifyResponse(email *Email) ClassifiedResponse {
 		ResponseRejected:             0,
 		ResponsePending:              0,
 		ResponseDisclosure:           0,
+		ResponseB2BOnly:              0,
 	}
 
 	// Check for subject-specific patterns (strong signal - worth +3)
@@ -358,6 +386,17 @@ func ClassifyResponse(email *Email) ClassifiedResponse {
 	for _, pattern := range rejectionPatterns {
 		if pattern.MatchString(content) || pattern.MatchString(subject) {
 			scores[ResponseRejected]++
+		}
+	}
+
+	// Check B2B-only patterns. Weighted +2: this is a claim about the
+	// company that, once acted on, stops every future send to it, so it
+	// should beat an incidental rejection phrase in the same message
+	// ("we are a B2B provider and have no record of you" is B2B-only, not
+	// a no-record result).
+	for _, pattern := range b2bOnlyPatterns {
+		if pattern.MatchString(content) {
+			scores[ResponseB2BOnly] += 2
 		}
 	}
 
@@ -468,6 +507,8 @@ func getClassificationReason(responseType ResponseType, score int) string {
 		return "Request is being processed, follow-up may be needed"
 	case ResponseDisclosure:
 		return "Subject access response - contains the data they hold, including sources and recipients; read it before erasing"
+	case ResponseB2BOnly:
+		return "Company says it holds no consumer data at all - consider tagging it b2b-only so no further requests are sent"
 	case ResponseUnknown:
 		return "Could not automatically classify this response"
 	default:

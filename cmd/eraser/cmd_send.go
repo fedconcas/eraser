@@ -291,11 +291,12 @@ func runSend() error {
 		// form instead" cases documented in their notes) have nothing to
 		// send to - skip rather than let the SMTP layer choke on an empty
 		// recipient and burn a daily-cap slot on a guaranteed failure.
-		if strings.TrimSpace(b.Email) == "" {
+		if !b.Sendable() {
+			reason := b.NotSendableReason()
 			if b.OptOutURL != "" {
-				fmt.Printf("  ⏭️  No email on file - use the opt-out form instead: %s\n", b.OptOutURL)
+				fmt.Printf("  ⏭️  %s - use the opt-out form instead: %s\n", reason, b.OptOutURL)
 			} else {
-				fmt.Printf("  ⏭️  No email on file - see notes in brokers.yaml\n")
+				fmt.Printf("  ⏭️  %s - see notes in brokers.yaml\n", reason)
 			}
 			continue
 		}

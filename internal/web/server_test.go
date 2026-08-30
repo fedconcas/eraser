@@ -268,15 +268,60 @@ func TestSendAllExcludesMissingEmailBrokers(t *testing.T) {
 		{ID: "spokeo", Name: "Spokeo", Email: "privacy@spokeo.com", Region: "us", Category: "people-search", Priority: "high"},
 		{ID: "whitepages", Name: "Whitepages", Email: "", Region: "us", Category: "people-search", Priority: "high"},
 		{ID: "donotcall-registry", Name: "Do Not Call Registry", Email: "", Region: "us", Category: "non-broker", Priority: "high"},
+		// Both of these have a perfectly valid address and would have gone
+		// into the job before the disposition tags existed.
+		{ID: "acme-b2b", Name: "Acme B2B", Email: "privacy@acme-b2b.example", Region: "us", Category: "marketing", Priority: "low", Tags: []string{broker.TagB2BOnly}},
+		{ID: "formy", Name: "Formy", Email: "privacy@formy.example", Region: "us", Category: "marketing", Priority: "low", Tags: []string{broker.TagFormOnly}},
 	}
 
-	got := withEmail(s.getBrokersWithStatus("default", brokerQuery{}))
+	got := sendable(s.getBrokersWithStatus("default", brokerQuery{}))
 
 	if len(got) != 1 || got[0].ID != "spokeo" {
 		var ids []string
 		for _, b := range got {
 			ids = append(ids, b.ID)
 		}
-		t.Errorf("bulk send target list = %v, want only [spokeo] - address-less brokers must not be emailed", ids)
+		t.Errorf("bulk send target list = %v, want only [spokeo] - address-less, b2b-only and form-only brokers must not be emailed", ids)
+	}
+}
+
+// TestSendAllSelectionCannotBypassGates is the guard on the explicit-selection
+// path. Posting broker_ids is user input: if the handler resolved those IDs
+// against s.brokerDB directly it would be a way around the config exclusions,
+// the active filters and the sendable gate all at once - which is exactly the
+// class of bug that let excluded brokers stay reachable through the
+// single-broker endpoint. IDs must only ever narrow the already-filtered list.
+func TestSendAllSelectionCannotBypassGates(t *testing.T) {
+	cfg := testConfig()
+	cfg.Options.ExcludedBrokers = []string{"excluded-one"}
+	cfg.Options.ExcludedCategories = []string{"skip-me"}
+	s := newTestServer(t, cfg)
+	s.brokerDB.Brokers = []broker.Broker{
+		{ID: "ok-one", Name: "OK One", Email: "privacy@ok1.example", Region: "us", Category: "marketing", Priority: "high"},
+		{ID: "ok-two", Name: "OK Two", Email: "privacy@ok2.example", Region: "us", Category: "marketing", Priority: "high"},
+		{ID: "no-address", Name: "No Address", Email: "", Region: "us", Category: "marketing", Priority: "high"},
+		{ID: "b2b", Name: "B2B Co", Email: "privacy@b2b.example", Region: "us", Category: "marketing", Priority: "high", Tags: []string{broker.TagB2BOnly}},
+		{ID: "formy", Name: "Formy", Email: "privacy@formy.example", Region: "us", Category: "marketing", Priority: "high", Tags: []string{broker.TagFormOnly}},
+		{ID: "excluded-one", Name: "Excluded One", Email: "privacy@ex1.example", Region: "us", Category: "marketing", Priority: "high"},
+		{ID: "cat-excluded", Name: "Cat Excluded", Email: "privacy@ex2.example", Region: "us", Category: "skip-me", Priority: "high"},
+	}
+
+	candidates := sendable(s.getBrokersWithStatus("default", brokerQuery{}))
+
+	// Simulate the handler's intersection over a selection that asks for
+	// everything, including all the brokers that must never be emailed.
+	picked := map[string]bool{
+		"ok-one": true, "no-address": true, "b2b": true,
+		"formy": true, "excluded-one": true, "cat-excluded": true,
+	}
+	var got []string
+	for _, b := range candidates {
+		if picked[b.ID] {
+			got = append(got, b.ID)
+		}
+	}
+
+	if len(got) != 1 || got[0] != "ok-one" {
+		t.Errorf("selection resolved to %v, want only [ok-one]; a posted ID must not reach an excluded, address-less, b2b-only or form-only broker", got)
 	}
 }

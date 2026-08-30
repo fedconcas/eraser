@@ -288,3 +288,112 @@ func TestShippedBrokerDatabaseHasNoDuplicateEmails(t *testing.T) {
 		seen[email] = b.ID
 	}
 }
+
+func TestSendableGate(t *testing.T) {
+	tests := []struct {
+		name       string
+		broker     Broker
+		want       bool
+		wantReason string
+	}{
+		{"plain emailable broker", Broker{ID: "a", Email: "privacy@a.example"}, true, ""},
+		{"no address", Broker{ID: "b"}, false, "No email on file"},
+		{"b2b-only outranks a valid address", Broker{ID: "c", Email: "privacy@c.example", Tags: []string{TagB2BOnly}}, false, "B2B only - holds no consumer data"},
+		{"form-only outranks a valid address", Broker{ID: "d", Email: "privacy@d.example", Tags: []string{TagFormOnly}}, false, "Accepts requests only through their web form"},
+		{"tag matching is case-insensitive", Broker{ID: "e", Email: "privacy@e.example", Tags: []string{"B2B-Only"}}, false, "B2B only - holds no consumer data"},
+		{"unrelated tags don't block a send", Broker{ID: "f", Email: "privacy@f.example", Tags: []string{"verified-2026"}}, true, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.broker.Sendable(); got != tt.want {
+				t.Errorf("Sendable() = %v, want %v", got, tt.want)
+			}
+			if got := tt.broker.NotSendableReason(); got != tt.wantReason {
+				t.Errorf("NotSendableReason() = %q, want %q", got, tt.wantReason)
+			}
+		})
+	}
+}
+
+// TestShippedBrokerDatabaseIDsAreStable is the guard that protects send
+// history. Every record in history.db - the resend cooldown
+// (history.SendKey), the inbox reply gate (ContactedBrokerIDs), the "Sent"
+// badge (GetAllBrokerStatuses) - is keyed on the broker ID string in this
+// file. Rename or drop an ID and the app forgets it ever wrote to that
+// broker, which means it will write again.
+//
+// So this pins the ID set itself. A bulk retag or triage pass may add
+// entries and may edit any other field; it must never rename or remove one.
+// If you are deliberately retiring a broker, delete its line from
+// testdata/shipped-broker-ids.txt in the same commit, and say in the commit
+// message what happens to its history rows.
+func TestShippedBrokerDatabaseIDsAreStable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "data", "brokers.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var db BrokerDatabase
+	if err := yaml.Unmarshal(data, &db); err != nil {
+		t.Fatal(err)
+	}
+
+	pinned, err := os.ReadFile(filepath.Join("testdata", "shipped-broker-ids.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := make(map[string]bool)
+	for _, line := range strings.Split(string(pinned), "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			want[line] = true
+		}
+	}
+
+	got := make(map[string]bool, len(db.Brokers))
+	for _, b := range db.Brokers {
+		if got[b.ID] {
+			t.Errorf("duplicate broker ID %q - history for it would be ambiguous", b.ID)
+		}
+		got[b.ID] = true
+	}
+
+	for id := range want {
+		if !got[id] {
+			t.Errorf("broker ID %q disappeared from data/brokers.yaml; its send history in history.db is now orphaned. If this is deliberate, remove it from testdata/shipped-broker-ids.txt too.", id)
+		}
+	}
+	if len(got) < len(want) {
+		t.Errorf("broker count fell from %d to %d", len(want), len(got))
+	}
+}
+
+// TestDispositionTagsAreKnown keeps the tag vocabulary closed. Tags drive
+// Sendable(), so a typo ("b2b_only", "formonly") would read as "no
+// disposition" and quietly put the broker back in the send list.
+func TestDispositionTagsAreKnown(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "data", "brokers.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var db BrokerDatabase
+	if err := yaml.Unmarshal(data, &db); err != nil {
+		t.Fatal(err)
+	}
+
+	known := make(map[string]bool, len(DispositionTags))
+	for _, tag := range DispositionTags {
+		known[tag] = true
+	}
+
+	for _, b := range db.Brokers {
+		for _, tag := range b.Tags {
+			if !known[strings.ToLower(strings.TrimSpace(tag))] {
+				t.Errorf("broker %q carries unknown tag %q, want one of %v", b.ID, tag, DispositionTags)
+			}
+		}
+		// A tagged broker must say why, so the decision is auditable and a
+		// future maintainer can tell an evidenced tag from a guess.
+		if (b.HasTag(TagB2BOnly) || b.HasTag(TagFormOnly)) && strings.TrimSpace(b.Notes) == "" {
+			t.Errorf("broker %q carries a disposition tag but has no notes explaining it", b.ID)
+		}
+	}
+}
