@@ -813,6 +813,8 @@ brokers:
       region: us
       category: marketing
       priority: low
+      notes: 'Updated from datenanfragen.de record "audigent" (https://audigent.com/platform-privacy-policy)'
+      tags: [form-only]
     - id: automotive-mastermind
       name: Automotive Mastermind
       email: ""
@@ -1513,6 +1515,8 @@ brokers:
       region: us
       category: marketing
       priority: low
+      notes: 'Updated from datenanfragen.de record "cuebiq" (https://www.cuebiq.com/privacypolicy/)'
+      tags: [form-only]
     - id: cybba
       name: Cybba Inc.
       email: privacy@cybba.com
@@ -6487,9 +6491,11 @@ brokers:
       name: CS Connect GmbH & Co. KG
       email: datenschutz@cs-connect.de
       website: https://www.cs-connect.de
+      opt_out_url: https://www.cs-connect.de/kontakt/
       region: eu
       category: financial-b2b
       priority: high
+      notes: 'Updated from datenanfragen.de record "cs-connect" (https://www.cs-connect.de/datenschutz.jsp)'
     - id: dastelefonbuch
       name: DTM Deutsche Tele Medien GmbH
       email: datenschutz@dtme.de
@@ -6501,9 +6507,11 @@ brokers:
       name: DEMDA Deutsche Mieter Datenbank GmbH & Co. KG
       email: info@demda.de
       website: https://www.demda.de
+      opt_out_url: https://www.demda.de/eigenauskunft.php
       region: eu
       category: financial-b2b
       priority: high
+      notes: 'Updated from datenanfragen.de record "demda" (https://www.demda.de/index.php?ids=24)'
     - id: deutsche-post-adress
       name: Deutsche Post Adress GmbH & Co. KG
       email: datenschutz@postadress.de
@@ -6515,9 +6523,11 @@ brokers:
       name: Deutsche Post Direkt GmbH
       email: datenschutz@postdirekt.de
       website: https://service.postdirekt.de/portal
+      opt_out_url: https://www.deutschepost.de/de/d/deutsche-post-direkt/kontakt.html?thema=Datenschutz%20%28z.B.%20Widerspruch%20zur%20Datenverwendung%29
       region: eu
       category: marketing
       priority: high
+      notes: 'Updated from datenanfragen.de record "deutsche-post-direkt" (https://service.postdirekt.de/portal/datenschutz)'
     - id: dnb-at
       name: Dun & Bradstreet Austria GmbH
       email: eigenauskunft.at@dnb.com
@@ -6557,9 +6567,11 @@ brokers:
       name: Besurance HIS GmbH
       email: datenschutz@besurance-his.de
       website: https://besurance-his.de
+      opt_out_url: https://besurance-his.de/selbstauskunft
       region: eu
       category: financial-b2b
       priority: high
+      notes: 'Updated from datenanfragen.de record "informa-his" (https://besurance-his.de/datenschutz)'
     - id: infoscore
       name: infoscore Consumer Data GmbH
       email: ICD-Datenschutz@experian.com
@@ -6571,9 +6583,11 @@ brokers:
       name: Intrum Information Services Deutschland GmbH
       email: datenschutz.de@intrum.com
       website: https://www.intrum.de
+      opt_out_url: https://www.intrum.de/zahlungserinnerung-erhalten/uber-intrum/datenschutz/rechte-der-betroffenen-person/
       region: eu
       category: financial-b2b
       priority: high
+      notes: 'Updated from datenanfragen.de record "intrum-deutschland-gmbh" (https://www.intrum.de/zahlungserinnerung-erhalten/uber-intrum/datenschutz/datenschutzerklarung/)'
     - id: ksv1870
       name: KSV1870 Holding AG
       email: ksv1870.datenschutzbeauftragter@ksv.at
@@ -6620,9 +6634,11 @@ brokers:
       name: SAZ Services AG
       email: datenschutz.ch@saz.com
       website: https://www.saz.com/de
+      opt_out_url: https://www.saz.com/de/datenschutz
       region: eu
       category: marketing
       priority: medium
+      notes: 'Updated from datenanfragen.de record "saz" (https://www.saz.com/de/datenschutz)'
     - id: schober
       name: Capaneo GmbH
       email: datenschutz@capaneo.de
