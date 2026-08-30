@@ -28,43 +28,116 @@ type Monitor struct {
 	config  config.InboxConfig
 	client  *client.Client
 	brokers map[string]broker.Broker // Map of email domain to broker
+	// contacted limits broker matching to brokers we've actually written to.
+	// nil means "no gate" - only for callers with no history database (the
+	// tests); every real caller sets it via SetContactedBrokers.
+	contacted map[string]bool
 }
 
 // Email represents a parsed email from a broker
 type Email struct {
-	UID        uint32 // IMAP UID for operations like move/delete
-	MessageID  string
-	From       string
-	FromName   string // Sender display name (e.g., "Mail Delivery System")
-	FromDomain string
-	Subject    string
-	Body       string
-	HTMLBody   string
-	ReceivedAt time.Time
-	BrokerID   string // Matched broker ID (if found)
-	BrokerName string // Matched broker name (if found)
+	UID uint32 // IMAP UID for operations like move/delete
+	// Folder is the mailbox this email was fetched from. IMAP UIDs are only
+	// unique *within* a mailbox, so anything acting on UID (archiving above
+	// all) must carry the folder with it - a UID from [Gmail]/Spam applied
+	// against INBOX addresses a different message entirely.
+	Folder string
+	// UIDValidity is the selected mailbox's UIDVALIDITY at fetch time. If the
+	// server changes it, every UID we remembered now refers to something else;
+	// ArchiveEmails re-checks it before moving anything.
+	UIDValidity uint32
+	MessageID   string
+	From        string
+	FromName    string // Sender display name (e.g., "Mail Delivery System")
+	FromDomain  string
+	Subject     string
+	Body        string
+	HTMLBody    string
+	ReceivedAt  time.Time
+	BrokerID    string // Matched broker ID (if found)
+	BrokerName  string // Matched broker name (if found)
+}
+
+// unmatchableDomains are sender domains that must never identify a broker,
+// however they appear in the broker database.
+//
+// Brokers are matched on the sender's domain, and the shipped database maps
+// general-purpose ones: `google-search-removal` carries no contact address and
+// a website of google.com, and several brokers list free-mail contact
+// addresses. Left alone, every Google notification and every mail from any
+// Gmail user classified as a broker reply - 22 Google notices and the user's
+// own test mail were recorded that way in a live database. Mail *from* one of
+// these domains tells us nothing about who sent it, so it can never be
+// evidence of a broker reply.
+var unmatchableDomains = map[string]bool{
+	"gmail.com":      true,
+	"googlemail.com": true,
+	"google.com":     true,
+	"hotmail.com":    true,
+	"outlook.com":    true,
+	"live.com":       true,
+	"msn.com":        true,
+	"yahoo.com":      true,
+	"yahoo.co.uk":    true,
+	"ymail.com":      true,
+	"aol.com":        true,
+	"icloud.com":     true,
+	"me.com":         true,
+	"mac.com":        true,
+	"protonmail.com": true,
+	"proton.me":      true,
+	"gmx.com":        true,
+	"gmx.net":        true,
+	"mail.com":       true,
+	"zoho.com":       true,
+	"yandex.com":     true,
+	"yandex.ru":      true,
+	"fastmail.com":   true,
+	"tutanota.com":   true,
+	"hey.com":        true,
+	"pm.me":          true,
+	"web.de":         true,
+	"inbox.lv":       true,
+	"inbox.ru":       true,
+	"mail.ru":        true,
 }
 
 // NewMonitor creates a new inbox monitor
 func NewMonitor(cfg config.InboxConfig, brokerList []broker.Broker) *Monitor {
 	// Build a map of email domains to brokers for quick lookup
 	brokerMap := make(map[string]broker.Broker)
+	var skipped []string
+	addDomain := func(domain string, b broker.Broker) {
+		if domain == "" {
+			return
+		}
+		if unmatchableDomains[domain] {
+			skipped = append(skipped, fmt.Sprintf("%s (%s)", domain, b.ID))
+			return
+		}
+		brokerMap[domain] = b
+	}
+
 	for _, b := range brokerList {
 		// Extract domain from broker email
 		if b.Email != "" {
 			parts := strings.Split(b.Email, "@")
 			if len(parts) == 2 {
-				domain := strings.ToLower(parts[1])
-				brokerMap[domain] = b
+				addDomain(strings.ToLower(parts[1]), b)
 			}
 		}
-		// Also map by website domain
-		if b.Website != "" {
-			domain := extractDomain(b.Website)
-			if domain != "" {
-				brokerMap[domain] = b
-			}
+		// Also map by website domain - but only for a broker we could
+		// actually have written to. A broker with no contact address can
+		// never reply, so mapping its website domain can only ever produce
+		// false matches; that is exactly how google.com entered the map.
+		if b.Website != "" && b.Email != "" {
+			addDomain(extractDomain(b.Website), b)
 		}
+	}
+
+	if len(skipped) > 0 {
+		log.Printf("Inbox matching: ignoring %d general-purpose sender domain(s) from the broker database: %s",
+			len(skipped), strings.Join(skipped, ", "))
 	}
 
 	return &Monitor{
@@ -215,8 +288,11 @@ func (m *Monitor) FetchRecentEmails(ctx context.Context, days int) ([]Email, err
 	seqSet := new(imap.SeqSet)
 	seqSet.AddNum(uids...)
 
-	// Fetch envelope, body, and UID
-	section := &imap.BodySectionName{}
+	// Peek, so scanning doesn't mark every message in the mailbox as read: a
+	// plain BODY[] fetch implicitly sets \Seen (RFC 3501), which silently
+	// marked hundreds of inbox messages read on each scan. The archive-folder
+	// fetch below has always peeked; this path just never did.
+	section := &imap.BodySectionName{Peek: true}
 	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchUid, section.FetchItem()}
 
 	emails, err := m.fetchMessagesCtx(ctx, seqSet, items, section, len(uids))
@@ -224,7 +300,17 @@ func (m *Monitor) FetchRecentEmails(ctx context.Context, days int) ([]Email, err
 		return nil, err
 	}
 
+	stampSource(emails, m.config.Folder, mbox.UidValidity)
 	return emails, nil
+}
+
+// stampSource records which mailbox a batch of emails came from, and that
+// mailbox's UIDVALIDITY, so their UIDs stay resolvable later.
+func stampSource(emails []Email, folder string, uidValidity uint32) {
+	for i := range emails {
+		emails[i].Folder = folder
+		emails[i].UIDValidity = uidValidity
+	}
 }
 
 // parseMessage converts an IMAP message to our Email struct
@@ -254,11 +340,16 @@ func (m *Monitor) parseMessage(msg *imap.Message, section *imap.BodySectionName)
 		}
 	}
 
-	// Try to match to a known broker
+	// Try to match to a known broker. Requiring that we actually sent this
+	// broker a request is the second half of the filter (see
+	// unmatchableDomains for the first): a broker we never wrote to cannot be
+	// replying, so a domain match alone is not evidence of anything.
 	if email.FromDomain != "" {
 		if b, ok := m.brokers[email.FromDomain]; ok {
-			email.BrokerID = b.ID
-			email.BrokerName = b.Name
+			if m.contacted == nil || m.contacted[b.ID] {
+				email.BrokerID = b.ID
+				email.BrokerName = b.Name
+			}
 		}
 	}
 
@@ -319,6 +410,10 @@ func (m *Monitor) FetchBrokerEmails(ctx context.Context, days int) ([]Email, err
 
 // FetchBrokerEmailsFromFolder fetches broker emails from a specific folder
 func (m *Monitor) FetchBrokerEmailsFromFolder(ctx context.Context, folder string, days int) ([]Email, error) {
+	if m.client == nil {
+		return nil, fmt.Errorf("not connected to IMAP server")
+	}
+
 	// Select the specified folder
 	mbox, err := m.client.Select(folder, false)
 	if err != nil {
@@ -375,6 +470,7 @@ func (m *Monitor) FetchBrokerEmailsFromFolder(ctx context.Context, folder string
 			log.Printf("Warning: error fetching batch: %v", err)
 			continue
 		}
+		stampSource(batchEmails, folder, mbox.UidValidity)
 		allEmails = append(allEmails, batchEmails...)
 	}
 
@@ -513,14 +609,51 @@ func (m *Monitor) WatchForNewEmails(ctx context.Context, callback func(Email)) e
 	}
 }
 
-// EnsureFolderExists creates a folder/label if it doesn't already exist
+// EnsureFolderExists creates a folder/label if it doesn't already exist.
 func (m *Monitor) EnsureFolderExists(name string) error {
 	if m.client == nil {
 		return fmt.Errorf("not connected to IMAP server")
 	}
+	return m.ensureFolder(name)
+}
 
-	// List existing folders to check if it exists
-	mailboxes := make(chan *imap.MailboxInfo, 10)
+// ensureFolder creates name if absent, tolerating the "it already exists"
+// case without depending on the server's error text.
+//
+// It attempts CREATE first and only investigates on failure. RFC 3501 gives
+// "already exists" no distinguishable form - it's a tagged NO, and go-imap's
+// Create returns status.Err() while discarding the response code that RFC
+// 5530's [ALREADYEXISTS] would arrive in - so the error alone can't be
+// classified. Re-listing afterwards answers the only question that matters:
+// is the folder there now? That also makes a concurrent creation a success
+// rather than a failure, which the previous list-then-create order got wrong.
+func (m *Monitor) ensureFolder(name string) error {
+	if name == "" {
+		return fmt.Errorf("folder name is required")
+	}
+
+	createErr := m.client.Create(name)
+	if createErr == nil {
+		log.Printf("Created folder '%s'", name)
+		return nil
+	}
+
+	exists, listErr := m.folderExists(name)
+	if listErr != nil {
+		return fmt.Errorf("failed to create folder '%s' (%v) and could not verify whether it exists: %w", name, createErr, listErr)
+	}
+	if exists {
+		return nil
+	}
+
+	// A Gmail label with "Show in IMAP" turned off is invisible to LIST yet
+	// still blocks CREATE, which lands here and would otherwise read as an
+	// inscrutable failure.
+	return fmt.Errorf("failed to create folder '%s': %w (if this is a Gmail label that already exists, enable \"Show in IMAP\" for it in Gmail's label settings)", name, createErr)
+}
+
+func (m *Monitor) folderExists(name string) (bool, error) {
+	mailboxes := make(chan *imap.MailboxInfo, 20)
 	done := make(chan error, 1)
 	go func() {
 		done <- m.client.List("", "*", mailboxes)
@@ -528,27 +661,65 @@ func (m *Monitor) EnsureFolderExists(name string) error {
 
 	exists := false
 	for mbox := range mailboxes {
-		if strings.EqualFold(mbox.Name, name) {
+		if strings.EqualFold(imap.CanonicalMailboxName(mbox.Name), imap.CanonicalMailboxName(name)) {
 			exists = true
 		}
 	}
-
 	if err := <-done; err != nil {
-		return fmt.Errorf("failed to list folders: %w", err)
+		return false, fmt.Errorf("failed to list folders: %w", err)
 	}
+	return exists, nil
+}
 
-	if exists {
-		log.Printf("Folder '%s' already exists", name)
-		return nil
+// SetContactedBrokers restricts broker matching to brokers this install has
+// actually sent a removal request to (see history.Store.ContactedBrokerIDs).
+// Passing nil disables the gate, which is only appropriate where there is no
+// history database to consult.
+func (m *Monitor) SetContactedBrokers(ids map[string]bool) {
+	m.contacted = ids
+}
+
+// GroupUIDsByFolder buckets emails by the mailbox they were fetched from, so
+// each archive call addresses UIDs against the mailbox they actually belong
+// to. IMAP UIDs are unique only within a mailbox, so a flat list drawn from
+// several folders cannot be acted on safely.
+//
+// Emails with UID 0 are dropped: go-imap's SeqSet encodes 0 as "*", which
+// addresses the highest UID in the mailbox - i.e. the newest message, which
+// by definition is not one we selected. Emails with no folder recorded are
+// dropped for the same reason, since there is no mailbox to resolve their
+// UID against.
+func GroupUIDsByFolder(emails []Email) map[string][]uint32 {
+	groups := make(map[string][]uint32)
+	for _, e := range emails {
+		if e.UID == 0 || e.Folder == "" {
+			continue
+		}
+		groups[e.Folder] = append(groups[e.Folder], e.UID)
 	}
+	return groups
+}
 
-	// Create the folder
-	if err := m.client.Create(name); err != nil {
-		return fmt.Errorf("failed to create folder '%s': %w", name, err)
+// UIDValidityByFolder returns the UIDVALIDITY observed per folder at fetch
+// time, for ArchiveEmails to re-check before it moves anything. A folder
+// reporting two different values within one scan is a server-side
+// renumbering; the zero value means "unknown, skip the check".
+func UIDValidityByFolder(emails []Email) map[string]uint32 {
+	seen := make(map[string]uint32)
+	for _, e := range emails {
+		if e.Folder == "" || e.UIDValidity == 0 {
+			continue
+		}
+		if prev, ok := seen[e.Folder]; ok && prev != e.UIDValidity {
+			log.Printf("WARNING: folder %q reported two UIDVALIDITY values (%d, %d) during one scan - not archiving from it", e.Folder, prev, e.UIDValidity)
+			seen[e.Folder] = 0
+			continue
+		}
+		if seen[e.Folder] == 0 {
+			seen[e.Folder] = e.UIDValidity
+		}
 	}
-
-	log.Printf("Created folder '%s'", name)
-	return nil
+	return seen
 }
 
 // deletedUIDsBesides returns the UIDs currently flagged \Deleted in the
@@ -577,31 +748,86 @@ func (m *Monitor) deletedUIDsBesides(ours []uint32) ([]uint32, error) {
 	return unexpected, nil
 }
 
-// ArchiveEmails moves multiple emails to the archive folder
-func (m *Monitor) ArchiveEmails(uids []uint32, folder string) error {
+// ArchiveEmails moves messages out of srcFolder into destFolder.
+//
+// srcFolder is required and must be the mailbox the UIDs were fetched from -
+// IMAP UIDs mean nothing outside their own mailbox, so passing INBOX UIDs
+// while the caller meant Spam moves unrelated mail. Use GroupUIDsByFolder to
+// build the per-folder batches. wantUIDValidity, when non-zero, is checked
+// against the mailbox's current UIDVALIDITY and aborts the move if the server
+// has renumbered since the fetch.
+func (m *Monitor) ArchiveEmails(uids []uint32, srcFolder, destFolder string, wantUIDValidity uint32) error {
+	// Argument checks first, before touching the connection, so the rules
+	// that keep this from moving the wrong mail are verifiable without an
+	// IMAP server.
+	if err := checkArchiveArgs(uids, srcFolder, destFolder); err != nil {
+		return err
+	}
+	if len(uids) == 0 {
+		return nil
+	}
+	// A move onto itself is never what the caller wanted, and is actively
+	// destructive on the copy+expunge path (the copy is a no-op, then the
+	// expunge removes the only remaining copy). The scan reads the archive
+	// folder back to pick up already-filed replies, so this case arises
+	// naturally rather than only through misuse.
+	if sameMailbox(srcFolder, destFolder) {
+		return nil
+	}
+
 	if m.client == nil {
 		return fmt.Errorf("not connected to IMAP server")
 	}
 
-	if len(uids) == 0 {
-		return nil
+	mbox, err := m.client.Select(srcFolder, false)
+	if err != nil {
+		return fmt.Errorf("failed to select mailbox %q: %w", srcFolder, err)
+	}
+	if wantUIDValidity != 0 && mbox.UidValidity != wantUIDValidity {
+		return fmt.Errorf("archive: %q UIDVALIDITY changed (%d -> %d) since these messages were read; the UIDs now refer to different messages, so nothing was moved",
+			srcFolder, wantUIDValidity, mbox.UidValidity)
 	}
 
-	// Re-select INBOX to ensure we're in the right mailbox
-	if _, err := m.client.Select(m.config.Folder, false); err != nil {
-		return fmt.Errorf("failed to select mailbox: %w", err)
+	if err := m.ensureFolder(destFolder); err != nil {
+		return err
 	}
 
 	seqSet := new(imap.SeqSet)
 	seqSet.AddNum(uids...)
 
-	// Try MOVE first (RFC 6851) - this is most efficient
-	if err := m.client.UidMove(seqSet, folder); err != nil {
-		log.Printf("MOVE not supported, falling back to COPY+DELETE: %v", err)
+	// Decide up front whether a real MOVE is available, rather than calling
+	// UidMove and reacting to an error. go-imap's UidMove silently falls back
+	// to COPY + STORE(\Deleted) + EXPUNGE(nil) with no checks of its own when
+	// the server lacks MOVE, which means the careful guarded fallback below
+	// would never run - the unguarded one inside the library would.
+	moveSupported, err := m.client.Support("MOVE")
+	if err != nil {
+		return fmt.Errorf("archive: could not determine MOVE support: %w", err)
+	}
+
+	if !moveSupported {
+		// Copy-then-expunge is not a safe substitute everywhere. On Gmail,
+		// \Deleted + EXPUNGE inside Spam, Trash or All Mail permanently
+		// destroys the message rather than just unfiling it - and Gmail's
+		// COPY only adds a label to the same underlying message, so the
+		// "copy" made a moment earlier is destroyed along with it. Refuse
+		// rather than degrade.
+		if attrs, err := m.folderAttributes(srcFolder); err != nil {
+			log.Printf("Warning: could not read attributes of %q before archiving: %v", srcFolder, err)
+		} else {
+			for _, a := range attrs {
+				switch a {
+				case imap.JunkAttr, imap.TrashAttr, imap.AllAttr:
+					return fmt.Errorf("archive: refusing to move mail out of %q (%s) without server MOVE support - the copy+expunge fallback permanently deletes mail in this mailbox", srcFolder, a)
+				}
+			}
+		}
+
+		log.Printf("Server does not support MOVE; falling back to COPY+DELETE for %d message(s) in %q", len(uids), srcFolder)
 
 		// Fallback to COPY + DELETE if MOVE not supported
-		if err := m.client.UidCopy(seqSet, folder); err != nil {
-			return fmt.Errorf("failed to copy emails to '%s': %w", folder, err)
+		if err := m.client.UidCopy(seqSet, destFolder); err != nil {
+			return fmt.Errorf("failed to copy emails to '%s': %w", destFolder, err)
 		}
 
 		// Mark as deleted
@@ -647,8 +873,111 @@ func (m *Monitor) ArchiveEmails(uids []uint32, folder string) error {
 		if expungedCount != len(uids) {
 			log.Printf("WARNING: expunge removed %d message(s) but this operation only intended to remove %d - other \\Deleted-flagged mail may have been removed too", expungedCount, len(uids))
 		}
+
+		log.Printf("Archived %d emails from '%s' to '%s'", len(uids), srcFolder, destFolder)
+		return nil
 	}
 
-	log.Printf("Archived %d emails to '%s'", len(uids), folder)
+	if err := m.client.UidMove(seqSet, destFolder); err != nil {
+		return fmt.Errorf("failed to move emails from '%s' to '%s': %w", srcFolder, destFolder, err)
+	}
+
+	log.Printf("Archived %d emails from '%s' to '%s'", len(uids), srcFolder, destFolder)
 	return nil
+}
+
+// sameMailbox reports whether two mailbox names refer to the same folder,
+// normalizing the INBOX spelling the way the server would.
+func sameMailbox(a, b string) bool {
+	return strings.EqualFold(imap.CanonicalMailboxName(a), imap.CanonicalMailboxName(b))
+}
+
+// checkArchiveArgs validates the inputs that decide *which* messages get
+// moved. Kept separate and free of IMAP state so the rules can be tested
+// directly - these are the checks standing between a routine scan and moving
+// somebody's unrelated mail.
+func checkArchiveArgs(uids []uint32, srcFolder, destFolder string) error {
+	if srcFolder == "" {
+		return fmt.Errorf("archive: source folder is required (UIDs are only meaningful within the mailbox they came from)")
+	}
+	if destFolder == "" {
+		return fmt.Errorf("archive: destination folder is required")
+	}
+	// Reject UID 0 rather than filtering it out: go-imap encodes 0 in a
+	// SeqSet as "*", which addresses the highest UID in the mailbox - the
+	// newest message, which is certainly not one we classified. A zero here
+	// means an upstream fetch lost the UID, and silently dropping it would
+	// hide that.
+	for _, uid := range uids {
+		if uid == 0 {
+			return fmt.Errorf("archive: refusing to act on UID 0 (encodes as \"*\" and would address the newest message in %q)", srcFolder)
+		}
+	}
+	return nil
+}
+
+// folderAttributes returns the LIST attributes (\Junk, \Trash, \All, ...)
+// advertised for one mailbox.
+func (m *Monitor) folderAttributes(name string) ([]string, error) {
+	mailboxes := make(chan *imap.MailboxInfo, 20)
+	done := make(chan error, 1)
+	go func() {
+		done <- m.client.List("", "*", mailboxes)
+	}()
+
+	var attrs []string
+	for mbox := range mailboxes {
+		if strings.EqualFold(imap.CanonicalMailboxName(mbox.Name), imap.CanonicalMailboxName(name)) {
+			attrs = mbox.Attributes
+		}
+	}
+	if err := <-done; err != nil {
+		return nil, err
+	}
+	return attrs, nil
+}
+
+// FindSpecialFolder returns the mailbox advertising the given SPECIAL-USE
+// attribute (e.g. imap.JunkAttr for the spam folder).
+//
+// Discovery by attribute rather than by name is what makes this work across
+// accounts: Gmail's spam mailbox is "[Gmail]/Spam" in English but localized
+// elsewhere, and other servers call it "Junk". Note the server has to
+// volunteer these attributes in its LIST response - go-imap v1.2.1 cannot
+// send LIST ... RETURN (SPECIAL-USE) - so a server that only reports them on
+// request will yield nothing here, and the caller should treat "not found" as
+// "skip", not as an error.
+func (m *Monitor) FindSpecialFolder(attr string) (string, bool, error) {
+	if m.client == nil {
+		return "", false, fmt.Errorf("not connected to IMAP server")
+	}
+
+	mailboxes := make(chan *imap.MailboxInfo, 20)
+	done := make(chan error, 1)
+	go func() {
+		done <- m.client.List("", "*", mailboxes)
+	}()
+
+	var found string
+	for mbox := range mailboxes {
+		for _, a := range mbox.Attributes {
+			if strings.EqualFold(a, attr) && found == "" {
+				found = mbox.Name
+			}
+		}
+	}
+	if err := <-done; err != nil {
+		return "", false, fmt.Errorf("failed to list folders: %w", err)
+	}
+	return found, found != "", nil
+}
+
+// SpamFolder resolves which mailbox to scan for broker replies that were
+// filed as spam: the configured override if set, otherwise whichever mailbox
+// advertises \Junk.
+func (m *Monitor) SpamFolder() (string, bool, error) {
+	if m.config.SpamFolder != "" {
+		return m.config.SpamFolder, true, nil
+	}
+	return m.FindSpecialFolder(imap.JunkAttr)
 }

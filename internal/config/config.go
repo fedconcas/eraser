@@ -229,6 +229,21 @@ type InboxConfig struct {
 	Folder        string `yaml:"folder"`         // Folder to monitor (default: "INBOX")
 	AutoArchive   bool   `yaml:"auto_archive"`   // Automatically move processed emails to archive folder
 	ArchiveFolder string `yaml:"archive_folder"` // Folder to archive emails to (default: "Eraser")
+	// ScanSpam also scans the spam/junk mailbox for broker replies, and (with
+	// AutoArchive on) moves the ones it finds into ArchiveFolder - which on
+	// Gmail clears their spam status. Brokers replying to a bulk removal
+	// request are routinely misfiled as spam, so those replies would
+	// otherwise never be seen.
+	//
+	// Off by default: it widens what the tool reads, and the spam mailbox is
+	// where forged senders live, so it's worth opting into deliberately.
+	ScanSpam bool `yaml:"scan_spam,omitempty"`
+	// SpamFolder overrides which mailbox that means. Normally left empty, in
+	// which case the mailbox advertising the \Junk attribute is discovered at
+	// scan time - Gmail's is "[Gmail]/Spam" in English but localized
+	// elsewhere, and other servers call it "Junk", so hardcoding a name is
+	// wrong more often than not. Set this only if discovery finds nothing.
+	SpamFolder string `yaml:"spam_folder,omitempty"`
 }
 
 // Pipeline holds settings for the automation pipeline

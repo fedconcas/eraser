@@ -595,6 +595,46 @@ func (s *Store) ResolveProfileForBroker(brokerID string) (string, error) {
 	return normalizeProfileID(profileID.String), nil
 }
 
+// ContactedBrokerIDs returns the set of brokers this install has actually
+// sent a removal request to, across every profile.
+//
+// It exists to gate inbox classification: matching an incoming email to a
+// broker on its sender domain alone is far too loose to act on, because the
+// broker database maps general-purpose domains. `google-search-removal` has
+// no contact address and a website of google.com, and seven brokers list
+// @gmail.com contact addresses - so every Google notification and every mail
+// from any Gmail user was being recorded as a "broker response". With
+// auto-archive on, that would have moved ordinary correspondence out of the
+// inbox on every scan.
+//
+// A broker we never wrote to cannot be replying to us, so requiring a prior
+// request is both the strictest and the most obviously correct filter.
+// Deliberately not scoped to one profile: a shared inbox receives replies for
+// every profile, the same reason ResolveProfileForBroker looks across all of
+// them.
+func (s *Store) ContactedBrokerIDs() (map[string]bool, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT broker_id FROM removal_requests`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contacted brokers: %w", err)
+	}
+	defer rows.Close()
+
+	contacted := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan contacted broker: %w", err)
+		}
+		if id != "" {
+			contacted[id] = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read contacted brokers: %w", err)
+	}
+	return contacted, nil
+}
+
 type BrokerStatus struct {
 	BrokerID  string
 	LastSent  time.Time

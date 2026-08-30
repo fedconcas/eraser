@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/eraser-privacy/eraser/internal/history"
@@ -122,6 +123,31 @@ func (s *Server) handleAPIResponses(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// applyContactedBrokerGate restricts a monitor's broker matching to brokers
+// this install has actually written to.
+//
+// Without it, matching is a bare sender-domain lookup against a broker
+// database that maps general-purpose domains - google.com (from a broker with
+// no contact address at all) and several free-mail domains - so ordinary
+// correspondence was being recorded as broker replies, and would be moved out
+// of the inbox once auto-archiving was on. A broker we never wrote to cannot
+// be replying to us.
+//
+// If the history database is unavailable the gate can't be applied; log it
+// rather than leaving the caller to assume matching is filtered.
+func (s *Server) applyContactedBrokerGate(monitor *inbox.Monitor) {
+	if s.historyStore == nil {
+		log.Printf("Warning: no history database - inbox matching cannot be limited to brokers actually contacted")
+		return
+	}
+	contacted, err := s.historyStore.ContactedBrokerIDs()
+	if err != nil {
+		log.Printf("Warning: could not load contacted brokers, inbox matching left ungated: %v", err)
+		return
+	}
+	monitor.SetContactedBrokers(contacted)
+}
+
 func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 	// Check if inbox is configured
 	cfg := s.getConfig()
@@ -137,6 +163,7 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 
 	// Create inbox monitor
 	monitor := inbox.NewMonitor(cfg.Inbox, s.brokerDB.Brokers)
+	s.applyContactedBrokerGate(monitor)
 
 	// Connect to IMAP
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
@@ -173,6 +200,27 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// And the spam mailbox, where broker replies to a bulk request routinely
+	// end up. Discovery failing is not an error - the account may not
+	// advertise \Junk - so log and carry on with what we have.
+	if cfg.Inbox.ScanSpam {
+		spamFolder, found, err := monitor.SpamFolder()
+		switch {
+		case err != nil:
+			log.Printf("Warning: could not locate the spam folder: %v", err)
+		case !found:
+			log.Printf("Warning: scan_spam is on but no mailbox advertises \\Junk; set inbox.spam_folder to name it explicitly")
+		default:
+			spamEmails, err := monitor.FetchBrokerEmailsFromFolder(ctx, spamFolder, 7)
+			if err != nil {
+				log.Printf("Warning: failed to fetch from spam folder %s: %v", spamFolder, err)
+			} else {
+				log.Printf("Found %d broker email(s) in %s", len(spamEmails), spamFolder)
+				emails = append(emails, spamEmails...)
+			}
+		}
+	}
+
 	if len(emails) == 0 {
 		_, _ = w.Write([]byte(`
 			<div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
@@ -185,10 +233,10 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 
 	// Classify and store each email
 	var success, formRequired, confirmRequired, rejected, disclosure, unknown int
-	var processedUIDs []uint32 // Track UIDs for archiving
+	var processed []inbox.Email // Track which emails were processed, for archiving
 	for _, email := range emails {
 		classified := inbox.ClassifyResponse(&email)
-		processedUIDs = append(processedUIDs, email.UID)
+		processed = append(processed, email)
 
 		// Get body content (prefer plain text, fall back to HTML)
 		bodyContent := email.Body
@@ -250,14 +298,25 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Auto-archive processed emails to the Eraser folder
+	// Auto-archive processed emails to the Eraser folder.
+	//
+	// Grouped by the mailbox each was fetched from: this list mixes INBOX,
+	// the archive folder and (when enabled) spam, and an IMAP UID only means
+	// anything against its own mailbox. Passing the flat list through, as
+	// this used to, would move whichever unrelated INBOX messages happened to
+	// carry those numbers. ArchiveEmails no-ops on the archive-folder group,
+	// where source and destination are the same.
 	var archived int
-	if cfg.Inbox.AutoArchive && len(processedUIDs) > 0 {
-		if err := monitor.ArchiveEmails(processedUIDs, cfg.Inbox.ArchiveFolder); err != nil {
-			log.Printf("Warning: failed to archive emails: %v", err)
-		} else {
-			archived = len(processedUIDs)
-			log.Printf("Archived %d emails to %s folder", archived, cfg.Inbox.ArchiveFolder)
+	if cfg.Inbox.AutoArchive && len(processed) > 0 {
+		validity := inbox.UIDValidityByFolder(processed)
+		for srcFolder, uids := range inbox.GroupUIDsByFolder(processed) {
+			if err := monitor.ArchiveEmails(uids, srcFolder, cfg.Inbox.ArchiveFolder, validity[srcFolder]); err != nil {
+				log.Printf("Warning: failed to archive %d email(s) from %s: %v", len(uids), srcFolder, err)
+				continue
+			}
+			if !strings.EqualFold(srcFolder, cfg.Inbox.ArchiveFolder) {
+				archived += len(uids)
+			}
 		}
 	}
 
@@ -310,6 +369,7 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 
 	// Create inbox monitor
 	monitor := inbox.NewMonitor(cfg.Inbox, s.brokerDB.Brokers)
+	s.applyContactedBrokerGate(monitor)
 
 	// Connect to IMAP with longer timeout for full rescan
 	ctx, cancel := context.WithTimeout(r.Context(), 180*time.Second)
@@ -518,6 +578,7 @@ func (s *Server) handleAPIReclassify(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Found %d records missing email bodies, fetching from IMAP...", missingBodies)
 
 		monitor := inbox.NewMonitor(cfg.Inbox, s.brokerDB.Brokers)
+		s.applyContactedBrokerGate(monitor)
 
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 		defer cancel()

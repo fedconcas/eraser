@@ -696,3 +696,45 @@ func TestProfileIsolation_UpdateBrokerResponseBody(t *testing.T) {
 		t.Errorf("expected body updated after same-profile call, got %+v", got)
 	}
 }
+
+// ContactedBrokerIDs gates inbox matching: a broker we never wrote to can't be
+// replying to us. Without that gate, matching on sender domain alone recorded
+// ordinary Google and Gmail correspondence as broker responses.
+func TestContactedBrokerIDs(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now()
+
+	addRecord(t, s, "broker-a", StatusSent, now.Add(-1*time.Hour))
+	addRecord(t, s, "broker-b", StatusFailed, now.Add(-2*time.Hour))
+	// Same broker twice - the set must not care.
+	addRecord(t, s, "broker-a", StatusSent, now.Add(-3*time.Hour))
+
+	contacted, err := s.ContactedBrokerIDs()
+	if err != nil {
+		t.Fatalf("ContactedBrokerIDs: %v", err)
+	}
+
+	if len(contacted) != 2 {
+		t.Fatalf("expected 2 distinct brokers, got %d: %+v", len(contacted), contacted)
+	}
+	if !contacted["broker-a"] || !contacted["broker-b"] {
+		t.Errorf("expected both brokers present, got %+v", contacted)
+	}
+	// A broker that only ever appeared as an inbox match, never as a sent
+	// request - this is the case the gate exists to reject.
+	if contacted["google-search-removal"] {
+		t.Error("a broker never written to must not appear as contacted")
+	}
+}
+
+func TestContactedBrokerIDsEmptyOnFreshStore(t *testing.T) {
+	s := newTestStore(t)
+
+	contacted, err := s.ContactedBrokerIDs()
+	if err != nil {
+		t.Fatalf("ContactedBrokerIDs: %v", err)
+	}
+	if len(contacted) != 0 {
+		t.Errorf("expected an empty set on a fresh store, got %+v", contacted)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/eraser-privacy/eraser/internal/broker"
@@ -18,6 +19,7 @@ func monitorCmd() *cobra.Command {
 	var days int
 	var once bool
 	var watch bool
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "monitor",
@@ -32,18 +34,19 @@ This command will:
 
 Requires inbox configuration in config.yaml with IMAP settings.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMonitor(days, once, watch)
+			return runMonitor(days, once, watch, dryRun)
 		},
 	}
 
 	cmd.Flags().IntVar(&days, "days", 7, "Number of days to look back for emails")
 	cmd.Flags().BoolVar(&once, "once", false, "Check inbox once and exit (don't watch for new emails)")
 	cmd.Flags().BoolVar(&watch, "watch", false, "Continuously watch for new emails")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "List the broker emails that would be archived, with sender and subject, and move nothing")
 
 	return cmd
 }
 
-func runMonitor(days int, once bool, watch bool) error {
+func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 	cfg, err := config.Load(resolveConfigPath())
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -81,8 +84,16 @@ func runMonitor(days int, once bool, watch bool) error {
 	}
 	defer func() { _ = store.Close() }()
 
-	// Create inbox monitor
+	// Create inbox monitor, matching only brokers we've actually written to -
+	// a bare sender-domain match against the broker database pulls in
+	// ordinary mail (see inbox.unmatchableDomains and
+	// history.Store.ContactedBrokerIDs).
 	monitor := inbox.NewMonitor(cfg.Inbox, brokerDB.Brokers)
+	contacted, err := store.ContactedBrokerIDs()
+	if err != nil {
+		return fmt.Errorf("failed to load contacted brokers: %w", err)
+	}
+	monitor.SetContactedBrokers(contacted)
 
 	// Connect to IMAP
 	ctx, cancel := context.WithCancel(context.Background())
@@ -109,6 +120,32 @@ func runMonitor(days int, once bool, watch bool) error {
 	emails, err := monitor.FetchBrokerEmails(ctx, days)
 	if err != nil {
 		return fmt.Errorf("failed to fetch emails: %w", err)
+	}
+
+	// Brokers replying to a bulk request are routinely filed as spam, so
+	// those replies would otherwise never be seen. Discovery failing isn't
+	// fatal - the account may not advertise \Junk.
+	if cfg.Inbox.ScanSpam {
+		spamFolder, found, err := monitor.SpamFolder()
+		switch {
+		case err != nil:
+			fmt.Printf("⚠️  Could not locate the spam folder: %v\n", err)
+		case !found:
+			fmt.Println("⚠️  scan_spam is on but no mailbox advertises \\Junk; set inbox.spam_folder to name it explicitly")
+		default:
+			spamEmails, err := monitor.FetchBrokerEmailsFromFolder(ctx, spamFolder, days)
+			if err != nil {
+				fmt.Printf("⚠️  Could not read spam folder %s: %v\n", spamFolder, err)
+			} else if len(spamEmails) > 0 {
+				fmt.Printf("📨 Found %d broker email(s) in %s\n", len(spamEmails), spamFolder)
+				emails = append(emails, spamEmails...)
+			}
+		}
+	}
+
+	if dryRun {
+		printArchivePreview(emails, cfg.Inbox)
+		return nil
 	}
 
 	if len(emails) == 0 {
@@ -181,28 +218,20 @@ func runMonitor(days int, once bool, watch bool) error {
 		printClassifiedResponse(classified)
 	}
 
-	// Archive processed emails if enabled
+	// Archive processed emails if enabled. Grouped by source mailbox, since
+	// an IMAP UID is only meaningful against the folder it came from, and
+	// ArchiveEmails creates the destination itself.
 	if cfg.Inbox.AutoArchive && len(emails) > 0 {
 		archiveFolder := cfg.Inbox.ArchiveFolder
+		validity := inbox.UIDValidityByFolder(emails)
 
-		// Ensure archive folder exists
-		if err := monitor.EnsureFolderExists(archiveFolder); err != nil {
-			fmt.Printf("⚠️  Could not create archive folder: %v\n", err)
-		} else {
-			// Collect UIDs to archive
-			var uidsToArchive []uint32
-			for _, email := range emails {
-				if email.UID > 0 {
-					uidsToArchive = append(uidsToArchive, email.UID)
-				}
+		for srcFolder, uids := range inbox.GroupUIDsByFolder(emails) {
+			if err := monitor.ArchiveEmails(uids, srcFolder, archiveFolder, validity[srcFolder]); err != nil {
+				fmt.Printf("⚠️  Could not archive %d email(s) from '%s': %v\n", len(uids), srcFolder, err)
+				continue
 			}
-
-			if len(uidsToArchive) > 0 {
-				if err := monitor.ArchiveEmails(uidsToArchive, archiveFolder); err != nil {
-					fmt.Printf("⚠️  Could not archive emails: %v\n", err)
-				} else {
-					fmt.Printf("📁 Archived %d emails to '%s'\n", len(uidsToArchive), archiveFolder)
-				}
+			if !strings.EqualFold(srcFolder, archiveFolder) {
+				fmt.Printf("📁 Archived %d emails from '%s' to '%s'\n", len(uids), srcFolder, archiveFolder)
 			}
 		}
 	}
@@ -304,4 +333,49 @@ func printClassifiedResponse(r inbox.ClassifiedResponse) {
 	if r.NeedsReview {
 		fmt.Printf("   ⚠️  Confidence: %.0f%% - manual review recommended\n", r.Confidence*100)
 	}
+}
+
+// printArchivePreview lists exactly which messages a real run would move, and
+// out of which mailbox, without touching anything.
+//
+// It prints sender and subject per message rather than a count, because a
+// count is precisely what hides the failure that matters here: matching a
+// broker on sender domain alone once pulled in ordinary Google and Gmail
+// correspondence, and "47 broker emails" reads as fine right up until you
+// notice your receipts are gone. Reading the senders is the check.
+func printArchivePreview(emails []inbox.Email, cfg config.InboxConfig) {
+	fmt.Println()
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("🔍 Dry run - nothing will be moved or recorded")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	if len(emails) == 0 {
+		fmt.Println("\nNo emails from known brokers found.")
+		return
+	}
+
+	groups := inbox.GroupUIDsByFolder(emails)
+	for _, e := range emails {
+		fmt.Printf("\n  [%s] %s\n      from: %s\n      subj: %s\n",
+			e.Folder, e.BrokerID, e.From, e.Subject)
+	}
+
+	fmt.Println()
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	for folder, uids := range groups {
+		if strings.EqualFold(folder, cfg.ArchiveFolder) {
+			fmt.Printf("  %-24s %3d message(s) - already filed, would not move\n", folder, len(uids))
+			continue
+		}
+		fmt.Printf("  %-24s %3d message(s) would move to '%s'\n", folder, len(uids), cfg.ArchiveFolder)
+	}
+
+	if !cfg.AutoArchive {
+		fmt.Println()
+		fmt.Println("  auto_archive is off, so a real run would not move anything either.")
+		fmt.Println("  Set inbox.auto_archive: true in config.yaml to enable moving.")
+	}
+	fmt.Println()
+	fmt.Println("  Check the senders above before enabling. Anything that isn't a")
+	fmt.Println("  reply from a broker you wrote to should be reported, not archived.")
 }
