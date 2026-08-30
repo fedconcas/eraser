@@ -70,6 +70,12 @@ Note that `send` orders high-priority brokers first within a run regardless of `
   broker matching keys off the sender's domain, and it only takes one over-broad entry in
   `brokers.yaml` for ordinary mail to be swept up. Read the senders.
 
+  Inbox matching only recognises replies from brokers you have actually sent a request to, so
+  **clearing your send history also stops replies to those requests being recognised** - Settings >
+  Danger Zone > "Clear All History" empties the same table the matcher reads. The scan then reports
+  a quiet inbox rather than an error; `monitor` and the web scan both note it when there are no
+  sent requests on record.
+
   With `scan_spam` on, replies found in spam are moved out of it, which on Gmail also clears their
   spam status. Gmail may keep filing *future* replies as spam - a Gmail-side filter is the durable
   fix. Note Gmail purges spam after 30 days, so the rescue window is bounded regardless of `--days`.

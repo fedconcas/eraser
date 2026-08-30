@@ -87,6 +87,11 @@ func (s *Server) handleAPIDeleteFailed(w http.ResponseWriter, r *http.Request) {
 // handleAPIDeleteAllHistory backs Settings > Danger Zone > "Clear All
 // History". It only clears send history (removal_requests) - broker
 // database, config, and inbox-classified responses are untouched.
+//
+// It does have one non-obvious consequence: removal_requests is also what
+// inbox matching gates on (see applyContactedBrokerGate), so clearing it means
+// replies to those requests can no longer be recognised as broker mail. The
+// response says so, since "deleted 517 records" doesn't hint at it.
 func (s *Server) handleAPIDeleteAllHistory(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -103,9 +108,14 @@ func (s *Server) handleAPIDeleteAllHistory(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	message := fmt.Sprintf("Deleted %d history record(s)", deleted)
+	if deleted > 0 {
+		message += ". Note: inbox scanning matches replies against your sent requests, so replies to these are no longer recognised as broker mail."
+	}
+
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"deleted": deleted,
-		"message": fmt.Sprintf("Deleted %d history record(s)", deleted),
+		"message": message,
 	})
 }
 
@@ -144,6 +154,13 @@ func (s *Server) applyContactedBrokerGate(monitor *inbox.Monitor) {
 	if err != nil {
 		log.Printf("Warning: could not load contacted brokers, inbox matching left ungated: %v", err)
 		return
+	}
+	if len(contacted) == 0 {
+		// Not an error on a fresh install - no requests sent means no replies
+		// to find. But it's also what "Clear All History" leaves behind, and
+		// then the scan matches nothing while looking exactly like a quiet
+		// inbox. Say so rather than let it pass silently.
+		log.Printf("Note: no sent requests on record, so no incoming mail can be matched to a broker. If you cleared your history, replies to requests sent before that are no longer matchable.")
 	}
 	monitor.SetContactedBrokers(contacted)
 }

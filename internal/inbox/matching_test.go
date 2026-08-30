@@ -252,3 +252,32 @@ func TestSameMailbox(t *testing.T) {
 		}
 	}
 }
+
+// An empty contacted set is a real state - a fresh install, or what "Clear
+// All History" leaves behind - and it makes the gate reject everything. That
+// is correct (no sent requests means no replies), but indistinguishable from
+// a quiet inbox unless callers surface it, so the count is exposed.
+func TestContactedBrokerCount(t *testing.T) {
+	m := NewMonitor(config.InboxConfig{}, []broker.Broker{
+		{ID: "a", Email: "privacy@a.example"},
+	})
+
+	if _, gated := m.ContactedBrokerCount(); gated {
+		t.Error("no gate should be in force before SetContactedBrokers")
+	}
+
+	m.SetContactedBrokers(map[string]bool{})
+	n, gated := m.ContactedBrokerCount()
+	if !gated || n != 0 {
+		t.Errorf("empty set should report a gate in force with 0 brokers, got n=%d gated=%v", n, gated)
+	}
+	// And it really does reject everything, including a broker's own domain.
+	if got := parseFrom(t, m, "privacy", "a.example"); got.BrokerID != "" {
+		t.Errorf("an empty contacted set must match nothing, got %q", got.BrokerID)
+	}
+
+	m.SetContactedBrokers(map[string]bool{"a": true})
+	if n, gated := m.ContactedBrokerCount(); !gated || n != 1 {
+		t.Errorf("expected 1 contacted broker, got n=%d gated=%v", n, gated)
+	}
+}

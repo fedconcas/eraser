@@ -94,6 +94,14 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 		return fmt.Errorf("failed to load contacted brokers: %w", err)
 	}
 	monitor.SetContactedBrokers(contacted)
+	if len(contacted) == 0 {
+		// Not an error on a fresh install, but it's also the state "Clear All
+		// History" leaves behind - after which a scan matches nothing and
+		// looks just like a quiet inbox.
+		fmt.Println("ℹ️  No sent requests on record, so no incoming mail can be matched to a broker.")
+		fmt.Println("   If you cleared your history, replies to requests sent before that are no longer matchable.")
+		fmt.Println()
+	}
 
 	// Connect to IMAP
 	ctx, cancel := context.WithCancel(context.Background())

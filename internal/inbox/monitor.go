@@ -679,6 +679,23 @@ func (m *Monitor) SetContactedBrokers(ids map[string]bool) {
 	m.contacted = ids
 }
 
+// ContactedBrokerCount reports how many brokers the matching gate will admit,
+// and whether a gate is in force at all.
+//
+// Callers should surface a zero count rather than let it pass quietly: the
+// gate reads removal_requests, and "Clear All History" empties that table
+// (history.Store.DeleteAllHistory) while leaving the inbox settings untouched.
+// The scan then matches nothing at all and reports "no broker emails found",
+// which looks identical to a genuinely quiet inbox. Sending requests again
+// repopulates it; replies to requests sent before the wipe stay unmatchable,
+// because the record of having written to those brokers is gone.
+func (m *Monitor) ContactedBrokerCount() (int, bool) {
+	if m.contacted == nil {
+		return 0, false
+	}
+	return len(m.contacted), true
+}
+
 // GroupUIDsByFolder buckets emails by the mailbox they were fetched from, so
 // each archive call addresses UIDs against the mailbox they actually belong
 // to. IMAP UIDs are unique only within a mailbox, so a flat list drawn from
