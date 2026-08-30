@@ -32,6 +32,16 @@ type Monitor struct {
 	// nil means "no gate" - only for callers with no history database (the
 	// tests); every real caller sets it via SetContactedBrokers.
 	contacted map[string]bool
+	// contactedSlugs indexes those brokers by normalized ID and name, for
+	// resolving a helpdesk tenant label (anywho.zendesk.com -> anywho).
+	contactedSlugs map[string]string
+	// contactedAddresses maps each address we sent a request to onto its
+	// broker, for finding the original recipient quoted in a reply.
+	contactedAddresses map[string]string
+	// requestSubjects are the lowercased subject lines of the requests this
+	// install has sent. A message quoting one is a reply to us. Empty means
+	// subject-based matching is off.
+	requestSubjects []string
 }
 
 // Email represents a parsed email from a broker
@@ -56,6 +66,13 @@ type Email struct {
 	ReceivedAt  time.Time
 	BrokerID    string // Matched broker ID (if found)
 	BrokerName  string // Matched broker name (if found)
+	// Attributed reports whether BrokerID names a real broker. False with a
+	// non-empty BrokerID means this is a genuine reply to one of our requests
+	// that we could not pin to a broker - see inbox.IsUnattributed.
+	Attributed bool
+	// MatchedVia records which rule identified this as a reply, for logging
+	// and the dry-run preview.
+	MatchedVia string
 }
 
 // unmatchableDomains are sender domains that must never identify a broker,
@@ -340,28 +357,51 @@ func (m *Monitor) parseMessage(msg *imap.Message, section *imap.BodySectionName)
 		}
 	}
 
-	// Try to match to a known broker. Requiring that we actually sent this
-	// broker a request is the second half of the filter (see
-	// unmatchableDomains for the first): a broker we never wrote to cannot be
-	// replying, so a domain match alone is not evidence of anything.
-	if email.FromDomain != "" {
-		if b, ok := m.brokers[email.FromDomain]; ok {
-			if m.contacted == nil || m.contacted[b.ID] {
-				email.BrokerID = b.ID
+	// Body first: attributing a reply by the address we originally wrote to
+	// (quoted back at us in the auto-acknowledgement) needs the body parsed,
+	// and it's the most precise rule available. See matchReply for the order
+	// the rules are tried in and the guards that run before any of them.
+	if err := m.parseBody(email, msg, section); err != nil {
+		return nil, err
+	}
+
+	if match := m.matchReply(email); match.Matched() {
+		email.BrokerID = match.BrokerID
+		email.Attributed = match.Attributed
+		email.MatchedVia = match.Via
+		if match.Attributed {
+			if b, ok := m.brokerByID(match.BrokerID); ok {
 				email.BrokerName = b.Name
 			}
+		} else {
+			email.BrokerName = UnattributedName(match.BrokerID)
 		}
 	}
 
-	// Parse body
+	return email, nil
+}
+
+// brokerByID finds a broker in the domain map by its ID.
+func (m *Monitor) brokerByID(id string) (broker.Broker, bool) {
+	for _, b := range m.brokers {
+		if b.ID == id {
+			return b, true
+		}
+	}
+	return broker.Broker{}, false
+}
+
+// parseBody fills in the text and HTML bodies of email from the fetched
+// message.
+func (m *Monitor) parseBody(email *Email, msg *imap.Message, section *imap.BodySectionName) error {
 	r := msg.GetBody(section)
 	if r == nil {
-		return email, nil
+		return nil
 	}
 
 	mr, err := mail.CreateReader(r)
 	if err != nil {
-		return email, nil // Return without body on parse error
+		return nil // No body available; not fatal
 	}
 
 	// Process each part
@@ -387,7 +427,7 @@ func (m *Monitor) parseMessage(msg *imap.Message, section *imap.BodySectionName)
 		}
 	}
 
-	return email, nil
+	return nil
 }
 
 // FetchBrokerEmails fetches only emails from known broker domains
@@ -677,6 +717,44 @@ func (m *Monitor) folderExists(name string) (bool, error) {
 // history database to consult.
 func (m *Monitor) SetContactedBrokers(ids map[string]bool) {
 	m.contacted = ids
+
+	// Index them by normalized ID and name so a helpdesk tenant label can be
+	// resolved. Built here rather than per-message: the broker list is large
+	// and the set only changes when the gate does.
+	m.contactedSlugs = make(map[string]string, len(ids)*2)
+	for _, b := range m.brokers {
+		if ids != nil && !ids[b.ID] {
+			continue
+		}
+		if slug := normalizeSlug(b.ID); slug != "" {
+			m.contactedSlugs[slug] = b.ID
+		}
+		if slug := normalizeSlug(b.Name); slug != "" {
+			// Don't let a name collision silently reassign an ID match.
+			if _, taken := m.contactedSlugs[slug]; !taken {
+				m.contactedSlugs[slug] = b.ID
+			}
+		}
+	}
+}
+
+// SetContactedAddresses supplies the addresses this install has sent requests
+// to, mapped to their brokers (see history.Store.ContactedBrokerAddresses).
+// Used to attribute a reply by the original recipient quoted in its body.
+func (m *Monitor) SetContactedAddresses(addrs map[string]string) {
+	m.contactedAddresses = addrs
+}
+
+// SetRequestSubjects enables subject-based reply matching for the given
+// subject lines (see template.RequestSubjects). Passing none disables it,
+// leaving sender-domain matching as the only rule.
+func (m *Monitor) SetRequestSubjects(subjects []string) {
+	m.requestSubjects = m.requestSubjects[:0]
+	for _, s := range subjects {
+		if s = strings.ToLower(strings.TrimSpace(s)); s != "" {
+			m.requestSubjects = append(m.requestSubjects, s)
+		}
+	}
 }
 
 // ContactedBrokerCount reports how many brokers the matching gate will admit,

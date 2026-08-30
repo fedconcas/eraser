@@ -77,6 +77,9 @@ Note that `send` orders high-priority brokers first within a run regardless of `
   sent requests on record.
 
   With `scan_spam` on, replies found in spam are moved out of it, which on Gmail also clears their
-  spam status. Gmail may keep filing *future* replies as spam - a Gmail-side filter is the durable
+  spam status - but only replies that could be **attributed** to a specific broker. A reply
+  recognised solely by the request subject it quotes is recorded and flagged for review, and left
+  in spam: the subject is chosen by whoever sent the message, so on its own it must not be enough
+  to pull mail out of the one folder where forged senders are expected. Gmail may keep filing *future* replies as spam - a Gmail-side filter is the durable
   fix. Note Gmail purges spam after 30 days, so the rescue window is bounded regardless of `--days`.
 - `pipeline` - browser automation settings for `fill`

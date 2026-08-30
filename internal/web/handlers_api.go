@@ -12,6 +12,7 @@ import (
 
 	"github.com/eraser-privacy/eraser/internal/history"
 	"github.com/eraser-privacy/eraser/internal/inbox"
+	emaTemplate "github.com/eraser-privacy/eraser/internal/template"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -155,6 +156,22 @@ func (s *Server) applyContactedBrokerGate(monitor *inbox.Monitor) {
 		log.Printf("Warning: could not load contacted brokers, inbox matching left ungated: %v", err)
 		return
 	}
+	monitor.SetContactedBrokers(contacted)
+
+	// Subject-based reply matching, so brokers answering from a helpdesk
+	// tenant are recognised. Both inputs come from what was actually sent:
+	// the subjects of templates we used, and the addresses we wrote to.
+	if templates, err := s.historyStore.SentTemplates(); err != nil {
+		log.Printf("Warning: could not load sent templates, subject-based reply matching disabled: %v", err)
+	} else {
+		monitor.SetRequestSubjects(emaTemplate.RequestSubjects(templates))
+	}
+	if addrs, err := s.historyStore.ContactedBrokerAddresses(); err != nil {
+		log.Printf("Warning: could not load contacted addresses, replies from helpdesk domains may go unattributed: %v", err)
+	} else {
+		monitor.SetContactedAddresses(addrs)
+	}
+
 	if len(contacted) == 0 {
 		// Not an error on a fresh install - no requests sent means no replies
 		// to find. But it's also what "Clear All History" leaves behind, and
@@ -162,7 +179,6 @@ func (s *Server) applyContactedBrokerGate(monitor *inbox.Monitor) {
 		// inbox. Say so rather than let it pass silently.
 		log.Printf("Note: no sent requests on record, so no incoming mail can be matched to a broker. If you cleared your history, replies to requests sent before that are no longer matchable.")
 	}
-	monitor.SetContactedBrokers(contacted)
 }
 
 func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
@@ -284,8 +300,10 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 			FormURL:      classified.FormURL,
 			ConfirmURL:   classified.ConfirmURL,
 			Confidence:   classified.Confidence,
-			NeedsReview:  classified.NeedsReview,
-			ReceivedAt:   email.ReceivedAt,
+			// A reply we recognised but couldn't pin to a broker always wants
+			// a human look, whatever the classifier made of its wording.
+			NeedsReview: classified.NeedsReview || inbox.IsUnattributed(email.BrokerID),
+			ReceivedAt:  email.ReceivedAt,
 		}
 
 		if s.historyStore != nil {
@@ -325,8 +343,17 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 	// where source and destination are the same.
 	var archived int
 	if cfg.Inbox.AutoArchive && len(processed) > 0 {
-		validity := inbox.UIDValidityByFolder(processed)
-		for srcFolder, uids := range inbox.GroupUIDsByFolder(processed) {
+		// A reply found in spam is only rescued when it could be attributed to
+		// a broker (inbox.ArchiveDecision): the subject that identifies it as a
+		// reply is chosen by the sender, and spam is where forged senders live.
+		// Unattributed spam is still recorded above, flagged for review.
+		spamFolder, _, _ := monitor.SpamFolder()
+		movable, held := inbox.ArchivableUIDs(processed, spamFolder)
+		if len(held) > 0 {
+			log.Printf("Left %d unattributed message(s) in the spam folder for review rather than moving them", len(held))
+		}
+		validity := inbox.UIDValidityByFolder(movable)
+		for srcFolder, uids := range inbox.GroupUIDsByFolder(movable) {
 			if err := monitor.ArchiveEmails(uids, srcFolder, cfg.Inbox.ArchiveFolder, validity[srcFolder]); err != nil {
 				log.Printf("Warning: failed to archive %d email(s) from %s: %v", len(uids), srcFolder, err)
 				continue

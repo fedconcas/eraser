@@ -635,6 +635,70 @@ func (s *Store) ContactedBrokerIDs() (map[string]bool, error) {
 	return contacted, nil
 }
 
+// SentTemplates returns the distinct templates this install has actually sent
+// requests with.
+//
+// Inbox matching recognises a reply by the request subject it quotes, and the
+// subject is a function of the template. Deriving the set from what was really
+// sent - rather than from every template that exists - keeps the weakest
+// subject ("Personal Data Removal Request", four generic words) out of the
+// matcher for the great majority of users, who never send the generic
+// template. Same principle as ContactedBrokerIDs: don't match on something we
+// didn't do.
+func (s *Store) SentTemplates() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT template FROM removal_requests WHERE template != ''`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sent templates: %w", err)
+	}
+	defer rows.Close()
+
+	var templates []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, fmt.Errorf("failed to scan sent template: %w", err)
+		}
+		templates = append(templates, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read sent templates: %w", err)
+	}
+	return templates, nil
+}
+
+// ContactedBrokerAddresses maps each address we sent a request to onto the
+// broker it belongs to (lowercased).
+//
+// This is what lets a reply be attributed when it arrives from somewhere we'd
+// never recognise - a Zendesk or Jira tenant, or a parent company. Such a
+// reply is nearly always an auto-acknowledgement that quotes the message it's
+// answering, so the address we originally wrote to appears in its body.
+// Finding one there identifies the broker far more precisely than guessing
+// from the sender's domain.
+func (s *Store) ContactedBrokerAddresses() (map[string]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT email, broker_id FROM removal_requests WHERE email != ''`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list contacted addresses: %w", err)
+	}
+	defer rows.Close()
+
+	addrs := make(map[string]string)
+	for rows.Next() {
+		var email, brokerID string
+		if err := rows.Scan(&email, &brokerID); err != nil {
+			return nil, fmt.Errorf("failed to scan contacted address: %w", err)
+		}
+		if email == "" || brokerID == "" {
+			continue
+		}
+		addrs[strings.ToLower(strings.TrimSpace(email))] = brokerID
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read contacted addresses: %w", err)
+	}
+	return addrs, nil
+}
+
 type BrokerStatus struct {
 	BrokerID  string
 	LastSent  time.Time

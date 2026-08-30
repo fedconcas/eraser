@@ -12,6 +12,7 @@ import (
 	"github.com/eraser-privacy/eraser/internal/config"
 	"github.com/eraser-privacy/eraser/internal/history"
 	"github.com/eraser-privacy/eraser/internal/inbox"
+	emaTemplate "github.com/eraser-privacy/eraser/internal/template"
 	"github.com/spf13/cobra"
 )
 
@@ -94,6 +95,21 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 		return fmt.Errorf("failed to load contacted brokers: %w", err)
 	}
 	monitor.SetContactedBrokers(contacted)
+
+	// Recognise replies that arrive from a helpdesk tenant or parent company
+	// by the request subject they quote, and attribute them by the address we
+	// originally wrote to. Both derived from what was actually sent.
+	if templates, err := store.SentTemplates(); err != nil {
+		fmt.Printf("⚠️  Could not load sent templates, subject-based reply matching disabled: %v\n", err)
+	} else {
+		monitor.SetRequestSubjects(emaTemplate.RequestSubjects(templates))
+	}
+	if addrs, err := store.ContactedBrokerAddresses(); err != nil {
+		fmt.Printf("⚠️  Could not load contacted addresses: %v\n", err)
+	} else {
+		monitor.SetContactedAddresses(addrs)
+	}
+
 	if len(contacted) == 0 {
 		// Not an error on a fresh install, but it's also the state "Clear All
 		// History" leaves behind - after which a scan matches nothing and
@@ -133,8 +149,10 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 	// Brokers replying to a bulk request are routinely filed as spam, so
 	// those replies would otherwise never be seen. Discovery failing isn't
 	// fatal - the account may not advertise \Junk.
+	discoveredSpam := ""
 	if cfg.Inbox.ScanSpam {
 		spamFolder, found, err := monitor.SpamFolder()
+		discoveredSpam = spamFolder
 		switch {
 		case err != nil:
 			fmt.Printf("⚠️  Could not locate the spam folder: %v\n", err)
@@ -152,7 +170,7 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 	}
 
 	if dryRun {
-		printArchivePreview(emails, cfg.Inbox)
+		printArchivePreview(emails, cfg.Inbox, discoveredSpam)
 		return nil
 	}
 
@@ -192,8 +210,10 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 			FormURL:      classified.FormURL,
 			ConfirmURL:   classified.ConfirmURL,
 			Confidence:   classified.Confidence,
-			NeedsReview:  classified.NeedsReview,
-			ReceivedAt:   email.ReceivedAt,
+			// A reply we recognised but couldn't pin to a broker always wants
+			// a human look, whatever the classifier made of its wording.
+			NeedsReview: classified.NeedsReview || inbox.IsUnattributed(email.BrokerID),
+			ReceivedAt:  email.ReceivedAt,
 		}
 
 		if err := store.AddBrokerResponse(brokerResp); err != nil {
@@ -231,9 +251,17 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 	// ArchiveEmails creates the destination itself.
 	if cfg.Inbox.AutoArchive && len(emails) > 0 {
 		archiveFolder := cfg.Inbox.ArchiveFolder
-		validity := inbox.UIDValidityByFolder(emails)
 
-		for srcFolder, uids := range inbox.GroupUIDsByFolder(emails) {
+		// A reply found in spam is only rescued when we could attribute it to
+		// a broker - see inbox.ArchiveDecision. Unattributed spam is still
+		// recorded above, so it shows up for review.
+		movable, held := inbox.ArchivableUIDs(emails, discoveredSpam)
+		if len(held) > 0 {
+			fmt.Printf("🔒 Left %d message(s) in place (unattributed, found in spam) - review them in the UI\n", len(held))
+		}
+		validity := inbox.UIDValidityByFolder(movable)
+
+		for srcFolder, uids := range inbox.GroupUIDsByFolder(movable) {
 			if err := monitor.ArchiveEmails(uids, srcFolder, archiveFolder, validity[srcFolder]); err != nil {
 				fmt.Printf("⚠️  Could not archive %d email(s) from '%s': %v\n", len(uids), srcFolder, err)
 				continue
@@ -351,7 +379,7 @@ func printClassifiedResponse(r inbox.ClassifiedResponse) {
 // broker on sender domain alone once pulled in ordinary Google and Gmail
 // correspondence, and "47 broker emails" reads as fine right up until you
 // notice your receipts are gone. Reading the senders is the check.
-func printArchivePreview(emails []inbox.Email, cfg config.InboxConfig) {
+func printArchivePreview(emails []inbox.Email, cfg config.InboxConfig, spamFolder string) {
 	fmt.Println()
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Println("🔍 Dry run - nothing will be moved or recorded")
@@ -362,10 +390,22 @@ func printArchivePreview(emails []inbox.Email, cfg config.InboxConfig) {
 		return
 	}
 
-	groups := inbox.GroupUIDsByFolder(emails)
 	for _, e := range emails {
-		fmt.Printf("\n  [%s] %s\n      from: %s\n      subj: %s\n",
-			e.Folder, e.BrokerID, e.From, e.Subject)
+		label := e.BrokerID
+		if inbox.IsUnattributed(e.BrokerID) {
+			label = "UNATTRIBUTED (" + inbox.UnattributedDomain(e.BrokerID) + ")"
+		}
+		fmt.Printf("\n  [%s] %s   via %s\n      from: %s\n      subj: %s\n",
+			e.Folder, label, e.MatchedVia, e.From, e.Subject)
+	}
+
+	movable, held := inbox.ArchivableUIDs(emails, spamFolder)
+	groups := inbox.GroupUIDsByFolder(movable)
+	if len(held) > 0 {
+		fmt.Printf("\n  %d message(s) would be left in place (unattributed, found in spam):\n", len(held))
+		for _, e := range held {
+			fmt.Printf("      %s - %s\n", e.From, e.Subject)
+		}
 	}
 
 	fmt.Println()
