@@ -150,9 +150,8 @@ profile:
   phone: "+1-555-123-4567"
   date_of_birth: "1990-01-15"
   # Optional: other identities/addresses brokers may have indexed you under.
-  # additional_emails is also editable from the web UI (Settings -> edit a
-  # profile, or the setup wizard); the rest are CLI-only for now, but the web
-  # UI preserves them rather than overwriting them.
+  # All four are editable from the web UI (Settings -> edit a profile, or the
+  # setup wizard), one entry per line, as well as from `eraser init`.
   # additional_emails: [old-address@example.com]
   # name_variants: [Jane D.]
   # previous_addresses: ["456 Old Street, San Francisco, CA"]

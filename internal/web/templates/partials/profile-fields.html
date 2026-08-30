@@ -33,6 +33,17 @@
 </div>
 
 <div>
+    <label for="name_variants" class="label">Other Spellings of Your Name</label>
+    <textarea name="name_variants" id="name_variants" rows="3"
+        class="input {{if .Errors.name_variants}}border-error{{end}}"
+        placeholder="Maris Popens&#10;Jane D.">{{join .Profile.NameVariants "\n"}}</textarea>
+    {{if .Errors.name_variants}}
+    <p class="mt-1 text-sm text-error">{{.Errors.name_variants}}</p>
+    {{end}}
+    <p class="mt-1 text-sm text-muted">One per line. A version without diacritics, a maiden name, a nickname you've signed up to things with - anything a broker might have filed you under instead of your legal name.</p>
+</div>
+
+<div>
     <label for="email" class="label">Email Address <span class="text-error">*</span></label>
     <input type="email" name="email" id="email" required
         value="{{.Profile.Email}}"
@@ -107,6 +118,28 @@
                     class="input"
                     placeholder="+1 (555) 123-4567">
             </div>
+        </div>
+
+        <div>
+            <label for="additional_phones" class="label">Other Phone Numbers</label>
+            <textarea name="additional_phones" id="additional_phones" rows="3"
+                class="input {{if .Errors.additional_phones}}border-error{{end}}"
+                placeholder="+371 20 123 456&#10;+1 (555) 987-6543">{{join .Profile.AdditionalPhones "\n"}}</textarea>
+            {{if .Errors.additional_phones}}
+            <p class="mt-1 text-sm text-error">{{.Errors.additional_phones}}</p>
+            {{end}}
+            <p class="mt-1 text-sm text-muted">One per line. An old number or a work line a broker may have on file instead of your current one.</p>
+        </div>
+
+        <div>
+            <label for="previous_addresses" class="label">Previous Addresses</label>
+            <textarea name="previous_addresses" id="previous_addresses" rows="4"
+                class="input {{if .Errors.previous_addresses}}border-error{{end}}"
+                placeholder="123 Main St, San Francisco, CA 94102&#10;45 Old Road, Riga, LV-1005">{{join .Profile.PreviousAddresses "\n"}}</textarea>
+            {{if .Errors.previous_addresses}}
+            <p class="mt-1 text-sm text-error">{{.Errors.previous_addresses}}</p>
+            {{end}}
+            <p class="mt-1 text-sm text-muted">One full address per line - commas within an address are kept, so write them normally. Anywhere you've lived in the last 5-7 years is worth adding; a partial address still helps, since brokers mostly match on street and postal code.</p>
         </div>
     </div>
 </div>

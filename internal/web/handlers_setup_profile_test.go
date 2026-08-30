@@ -1,6 +1,7 @@
 package web
 
 import (
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -65,16 +66,26 @@ func TestSetupWizardRerunPreservesCLIOnlyProfileFields(t *testing.T) {
 	if cookie == nil {
 		t.Fatal("expected the wizard to set a session cookie")
 	}
-	if !strings.Contains(getRec.Body.String(), "old@example.com") {
-		t.Error("GET should pre-fill the additional-emails textarea from the saved config")
+	// Unescape first: html/template renders "+" as "&#43;", so a raw
+	// substring match on a phone number would fail for the wrong reason.
+	rendered := html.UnescapeString(getRec.Body.String())
+	for _, want := range []string{"old@example.com", "Maris", "1 Old St, Riga", "+371 20000000"} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("GET should pre-fill %q from the saved config", want)
+		}
 	}
 
+	// Every list textarea is present in this submission, carrying back what
+	// the GET rendered - the same thing a browser would post.
 	form := url.Values{
-		"first_name":        {"Test"},
-		"last_name":         {"User"},
-		"email":             {"test@example.com"},
-		"city":              {"Riga"},
-		"additional_emails": {"old@example.com"},
+		"first_name":         {"Test"},
+		"last_name":          {"User"},
+		"email":              {"test@example.com"},
+		"city":               {"Riga"},
+		"additional_emails":  {"old@example.com"},
+		"name_variants":      {"Maris"},
+		"previous_addresses": {"1 Old St, Riga"},
+		"additional_phones":  {"+371 20000000"},
 	}
 	postReq := httptest.NewRequest(http.MethodPost, "/setup/profile", strings.NewReader(form.Encode()))
 	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")

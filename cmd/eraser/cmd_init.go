@@ -61,10 +61,15 @@ func runInit() error {
 	cfg.Profile.FirstName = promptWithDefault(reader, "First name", existing.Profile.FirstName)
 	cfg.Profile.MiddleName = promptWithDefault(reader, "Middle name (optional)", existing.Profile.MiddleName)
 	cfg.Profile.LastName = promptWithDefault(reader, "Last name", existing.Profile.LastName)
+	// Semicolon-separated, like the addresses prompt below: a name variant
+	// can legitimately contain a comma ("Smith, John"), and the web UI's
+	// textarea accepts one for that reason. Splitting this prompt on commas
+	// meant a variant entered in the browser was shredded into two the next
+	// time someone ran `init` and pressed Enter to keep the current value.
 	nameVariants := promptWithDefault(reader,
-		"Other spellings of your name brokers might have, e.g. without diacritics - comma separated (optional)",
-		strings.Join(existing.Profile.NameVariants, ", "))
-	cfg.Profile.NameVariants = splitAndTrim(nameVariants)
+		"Other spellings of your name brokers might have, e.g. without diacritics - semicolon separated (optional)",
+		strings.Join(existing.Profile.NameVariants, "; "))
+	cfg.Profile.NameVariants = splitAndTrimBy(nameVariants, ";")
 	cfg.Profile.Email = promptWithDefault(reader, "Email address", existing.Profile.Email)
 	otherEmails := promptWithDefault(reader,
 		"Other email addresses you've used over the years - comma separated (optional)",
