@@ -103,7 +103,14 @@ type BrokerResponse struct {
 	ResponseType string // form_required, confirmation_required, success, rejected, pending, unknown
 	EmailFrom    string
 	EmailSubject string
-	EmailBody    string // Stored for reclassification
+	// EmailMessageID is the RFC 5322 Message-ID header of the reply, when
+	// the IMAP envelope carried one. It is the identity a rescan dedupes
+	// on - unlike an IMAP UID it survives the message being moved into the
+	// archive folder (which every auto-archiving scan does) and a
+	// UIDVALIDITY reset.
+	EmailMessageID string
+	MessageKey     string // Deduplication key; derived, set by AddBrokerResponse
+	EmailBody      string // Stored for reclassification
 	FormURL      string // Extracted form URL (if any)
 	ConfirmURL   string // Extracted confirmation URL (if any)
 	Confidence   float64
@@ -247,6 +254,18 @@ func (s *Store) migrate() error {
 	if err := addColumnIfMissing(s.db, `ALTER TABLE pending_tasks ADD COLUMN profile_id TEXT NOT NULL DEFAULT '`+DefaultProfileID+`'`); err != nil {
 		return err
 	}
+	// message_key: the per-message identity every scan dedupes on. Before it
+	// existed nothing marked a fetched message as already processed, so each
+	// `eraser monitor` / web inbox scan re-inserted every reply it had
+	// already classified - a database with 88 distinct replies had grown to
+	// 401 rows, inflating the pipeline view and every per-broker response
+	// count roughly 4.5x. Backfilled and de-duplicated below.
+	if err := addColumnIfMissing(s.db, `ALTER TABLE broker_responses ADD COLUMN email_message_id TEXT`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(s.db, `ALTER TABLE broker_responses ADD COLUMN message_key TEXT`); err != nil {
+		return err
+	}
 
 	query := `
 	CREATE TABLE IF NOT EXISTS removal_requests (
@@ -285,6 +304,8 @@ func (s *Store) migrate() error {
 		response_type TEXT NOT NULL,
 		email_from TEXT,
 		email_subject TEXT,
+		email_message_id TEXT,
+		message_key TEXT,
 		email_body TEXT,
 		form_url TEXT,
 		confirm_url TEXT,
@@ -328,6 +349,109 @@ func (s *Store) migrate() error {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
+	if err := s.migrateBrokerResponseMessageKeys(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// migrateBrokerResponseMessageKeys gives every broker_responses row the
+// message_key AddBrokerResponse now dedupes on, collapses the duplicates
+// that accumulated while no such key existed, and then enforces uniqueness
+// so they cannot come back. Idempotent: on a database that has already been
+// through it there is nothing to backfill, nothing to delete, and the index
+// already exists.
+func (s *Store) migrateBrokerResponseMessageKeys() error {
+	if err := s.backfillBrokerResponseMessageKeys(); err != nil {
+		return err
+	}
+
+	// Collapse duplicates, keeping one row per (profile, message) - the row
+	// with a stored email body if any has one (only the web scan records
+	// bodies, so the newest row is not always the richest), and otherwise
+	// the most recently written, whose classification is the current one.
+	if _, err := s.db.Exec(`
+	DELETE FROM broker_responses WHERE id NOT IN (
+		SELECT id FROM (
+			SELECT id, ROW_NUMBER() OVER (
+				PARTITION BY profile_id, message_key
+				ORDER BY (CASE WHEN email_body IS NOT NULL AND email_body != '' THEN 0 ELSE 1 END), id DESC
+			) AS rn
+			FROM broker_responses
+		) WHERE rn = 1
+	)`); err != nil {
+		return fmt.Errorf("failed to de-duplicate broker responses: %w", err)
+	}
+
+	if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_br_message_key ON broker_responses(profile_id, message_key)`); err != nil {
+		return fmt.Errorf("failed to create broker response message key index: %w", err)
+	}
+	return nil
+}
+
+// backfillBrokerResponseMessageKeys derives a message_key for rows written
+// before the column existed. The Message-ID header was never stored back
+// then, so these get the derived (broker, subject, received_at) identity -
+// the same one BuildMessageKey falls back to, and the one AddBrokerResponse
+// looks for when upgrading a legacy row to its real Message-ID.
+//
+// received_at is normalized through the Go side rather than compared as a
+// string in SQL because it was written by the driver in Go's own
+// time.Time.String() layout, which is not what the key uses.
+func (s *Store) backfillBrokerResponseMessageKeys() error {
+	rows, err := s.db.Query(`SELECT id, broker_id, email_subject, received_at
+		FROM broker_responses WHERE message_key IS NULL OR message_key = ''`)
+	if err != nil {
+		return fmt.Errorf("failed to query broker responses needing a message key: %w", err)
+	}
+
+	type keyed struct {
+		id  int64
+		key string
+	}
+	var pending []keyed
+	for rows.Next() {
+		var id int64
+		var brokerID string
+		var subject, receivedAt sql.NullString
+		if err := rows.Scan(&id, &brokerID, &subject, &receivedAt); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("failed to scan broker response for message key backfill: %w", err)
+		}
+		pending = append(pending, keyed{id: id, key: legacyMessageKey(brokerID, subject.String, normalizeStoredKeyTime(receivedAt))})
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("failed to read broker responses needing a message key: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("failed to close broker response backfill query: %w", err)
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin message key backfill: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.Prepare(`UPDATE broker_responses SET message_key = ? WHERE id = ?`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare message key backfill: %w", err)
+	}
+	defer func() { _ = stmt.Close() }()
+
+	for _, p := range pending {
+		if _, err := stmt.Exec(p.key, p.id); err != nil {
+			return fmt.Errorf("failed to backfill message key for broker response %d: %w", p.id, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit message key backfill: %w", err)
+	}
 	return nil
 }
 
@@ -490,11 +614,98 @@ func parseFlexibleTimeString(s sql.NullString) time.Time {
 	if !s.Valid {
 		return time.Time{}
 	}
-	if t, err := time.Parse(time.RFC3339, s.String); err == nil {
-		return t
-	}
-	t, _ := time.Parse("2006-01-02 15:04:05", s.String)
+	t, _ := parseStoredTime(s.String)
 	return t
+}
+
+// storedTimeLayouts are the shapes a DATETIME column in this database can
+// actually come back in. RFC3339 and the plain SQL layout are what SQLite's
+// own date functions and hand-written rows use; the last two are Go's
+// time.Time.String() output, which is what the driver writes when a
+// time.Time is passed as a parameter (e.g. "2026-08-30 12:53:20 +0000
+// +0000" - note the numeric offset repeated where an abbreviation would
+// normally go, which is why both a "MST" and a "-0700" zone-name variant
+// are needed).
+var storedTimeLayouts = []string{
+	time.RFC3339Nano,
+	"2006-01-02 15:04:05",
+	"2006-01-02 15:04:05.999999999 -0700 MST",
+	"2006-01-02 15:04:05.999999999 -0700 -0700",
+}
+
+// parseStoredTime parses a DATETIME value read back out of the database,
+// reporting whether any known layout matched.
+func parseStoredTime(raw string) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, false
+	}
+	// A time.Time carrying a monotonic reading stringifies with an
+	// " m=+0.000000000" suffix that no layout matches.
+	if i := strings.Index(raw, " m=+"); i > 0 {
+		raw = raw[:i]
+	} else if i := strings.Index(raw, " m=-"); i > 0 {
+		raw = raw[:i]
+	}
+	for _, layout := range storedTimeLayouts {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// messageKeyFieldSep is ASCII US (unit separator): it cannot appear in an
+// email subject or a broker ID, so no combination of field values can be
+// re-split into a different one.
+const messageKeyFieldSep = "\x1f"
+
+// BuildMessageKey derives the identity a fetched message is deduplicated on.
+//
+// Every scan re-fetches the same trailing window of mail, so without this a
+// reply is re-recorded once per scan. The RFC 5322 Message-ID is the right
+// key when the envelope carries one: unlike an IMAP UID it survives the
+// message being moved into the archive folder (which every auto-archiving
+// scan does, and the web scan then reads that folder back) and a UIDVALIDITY
+// reset. Mail with no Message-ID falls back to the derived identity below.
+func BuildMessageKey(messageID, brokerID, subject string, receivedAt time.Time) string {
+	if id := strings.TrimSpace(messageID); id != "" {
+		return "mid:" + id
+	}
+	return legacyMessageKey(brokerID, subject, formatKeyTime(receivedAt))
+}
+
+// legacyMessageKey builds the derived (broker, subject, received_at)
+// identity: the fallback for mail with no Message-ID, and the key the
+// backfill migration assigns to rows recorded before Message-IDs were
+// stored at all.
+func legacyMessageKey(brokerID, subject, receivedAt string) string {
+	return "msg:" + brokerID + messageKeyFieldSep + subject + messageKeyFieldSep + receivedAt
+}
+
+// formatKeyTime renders a timestamp for a message key at whole-second, UTC
+// granularity, so a key built from a freshly fetched envelope matches one
+// rebuilt from the same timestamp after a round trip through the database.
+func formatKeyTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02 15:04:05")
+}
+
+// normalizeStoredKeyTime renders a received_at read back out of the database
+// the way formatKeyTime would have rendered it at insert time. A value in no
+// recognized layout is kept verbatim rather than collapsed to the zero time,
+// which would key every unparseable row from one broker with one subject to
+// the same message.
+func normalizeStoredKeyTime(raw sql.NullString) string {
+	if !raw.Valid {
+		return ""
+	}
+	if t, ok := parseStoredTime(raw.String); ok {
+		return formatKeyTime(t)
+	}
+	return raw.String
 }
 
 // SendKey identifies one broker/request-type pair. The resend cooldown is
@@ -824,36 +1035,100 @@ func DBPathFor(configPath string) string {
 
 // ==================== Broker Response Methods ====================
 
-// AddBrokerResponse stores a classified response from a broker
+// AddBrokerResponse stores a classified response from a broker, once.
+//
+// Both scan entry points (`eraser monitor`, including its --watch callback,
+// and the web inbox scan) go through here, and both re-fetch the same
+// trailing window of mail on every run. Recording a message that has already
+// been recorded is therefore the normal case, not an error: it updates the
+// existing row's processed_at instead of inserting a second copy, and is the
+// only thing that keeps per-broker response counts and the pipeline view
+// from inflating by one multiple per scan.
+//
+// resp.ID is set either way - to the new row's ID, or to the existing one's.
 func (s *Store) AddBrokerResponse(resp *BrokerResponse) error {
 	resp.ProfileID = normalizeProfileID(resp.ProfileID)
+	resp.MessageKey = BuildMessageKey(resp.EmailMessageID, resp.BrokerID, resp.EmailSubject, resp.ReceivedAt)
 
-	query := `
-	INSERT INTO broker_responses (profile_id, broker_id, broker_name, response_type, email_from, email_subject, email_body,
-		form_url, confirm_url, confidence, needs_review, received_at, processed_at, created_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
+	// Rows recorded before Message-IDs were stored carry the derived key the
+	// backfill migration gave them, so a Message-ID key would not match them
+	// and every one of them would gain a fresh duplicate on the next scan.
+	// Upgrade the existing row's key in place instead.
+	if strings.HasPrefix(resp.MessageKey, "mid:") {
+		legacy := legacyMessageKey(resp.BrokerID, resp.EmailSubject, formatKeyTime(resp.ReceivedAt))
+		upgraded, err := s.upgradeLegacyMessageKey(resp, legacy)
+		if err != nil {
+			return err
+		}
+		if upgraded {
+			return nil
+		}
+	}
 
 	needsReview := 0
 	if resp.NeedsReview {
 		needsReview = 1
 	}
 
-	result, err := s.db.Exec(query,
-		resp.ProfileID, resp.BrokerID, resp.BrokerName, resp.ResponseType, resp.EmailFrom, resp.EmailSubject, resp.EmailBody,
+	// The upsert branch deliberately leaves the classification alone: a
+	// re-scan re-classifies with the same rules it used the first time, and
+	// deliberate re-classification goes through
+	// UpdateBrokerResponseClassification. It does fill in an email body the
+	// stored row is missing, so a reply first seen by `eraser monitor`
+	// (which does not store bodies) gains one when the web scan sees it.
+	query := `
+	INSERT INTO broker_responses (profile_id, broker_id, broker_name, response_type, email_from, email_subject,
+		email_message_id, message_key, email_body,
+		form_url, confirm_url, confidence, needs_review, received_at, processed_at, created_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(profile_id, message_key) DO UPDATE SET
+		processed_at = excluded.processed_at,
+		email_message_id = CASE WHEN broker_responses.email_message_id IS NULL OR broker_responses.email_message_id = ''
+			THEN excluded.email_message_id ELSE broker_responses.email_message_id END,
+		email_body = CASE WHEN broker_responses.email_body IS NULL OR broker_responses.email_body = ''
+			THEN excluded.email_body ELSE broker_responses.email_body END
+	RETURNING id
+	`
+
+	now := time.Now()
+	if err := s.db.QueryRow(query,
+		resp.ProfileID, resp.BrokerID, resp.BrokerName, resp.ResponseType, resp.EmailFrom, resp.EmailSubject,
+		resp.EmailMessageID, resp.MessageKey, resp.EmailBody,
 		resp.FormURL, resp.ConfirmURL, resp.Confidence, needsReview,
-		resp.ReceivedAt, time.Now(), time.Now(),
-	)
-	if err != nil {
+		resp.ReceivedAt, now, now,
+	).Scan(&resp.ID); err != nil {
 		return fmt.Errorf("failed to insert broker response: %w", err)
 	}
+	return nil
+}
 
-	id, err := result.LastInsertId()
+// upgradeLegacyMessageKey re-keys a row that was stored under the derived
+// (broker, subject, received_at) identity to the Message-ID identity of the
+// message now in hand, reporting whether such a row existed. This is a
+// one-time reconciliation per pre-existing row: once re-keyed, later scans
+// of the same message match it on the Message-ID directly.
+func (s *Store) upgradeLegacyMessageKey(resp *BrokerResponse, legacyKey string) (bool, error) {
+	if legacyKey == resp.MessageKey {
+		return false, nil
+	}
+
+	var id int64
+	err := s.db.QueryRow(`SELECT id FROM broker_responses WHERE profile_id = ? AND message_key = ?`,
+		resp.ProfileID, legacyKey).Scan(&id)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
 	if err != nil {
-		return fmt.Errorf("failed to get last insert id: %w", err)
+		return false, fmt.Errorf("failed to look up broker response by legacy message key: %w", err)
+	}
+
+	if _, err := s.db.Exec(`UPDATE broker_responses SET message_key = ?, email_message_id = ?, processed_at = ?,
+		email_body = CASE WHEN email_body IS NULL OR email_body = '' THEN ? ELSE email_body END
+		WHERE id = ?`, resp.MessageKey, resp.EmailMessageID, time.Now(), resp.EmailBody, id); err != nil {
+		return false, fmt.Errorf("failed to upgrade broker response message key: %w", err)
 	}
 	resp.ID = id
-	return nil
+	return true, nil
 }
 
 // FindBrokerResponseBySubject finds an existing response by profile, broker_id and email_subject
