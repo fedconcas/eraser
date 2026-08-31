@@ -2315,7 +2315,7 @@ brokers:
     - id: foursquare-labs
       name: Foursquare Labs, Inc.
       email: legal@foursquare.com
-      website: https://www.location.foursquare.com/
+      website: https://foursquare.com/
       opt_out_url: https://optout.aboutads.info/?c=2&lang=EN
       region: us
       category: marketing
@@ -3206,7 +3206,7 @@ brokers:
     - id: knowwho
       name: Knowwho
       email: bbrownson@knowwho.com
-      website: https://www.knowwho.com/
+      website: https://kw1.knowwho.com/
       region: us
       category: marketing
       priority: low
