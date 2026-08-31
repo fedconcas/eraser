@@ -395,13 +395,13 @@ func printClassifiedResponse(r inbox.ClassifiedResponse) {
 		fmt.Printf("   📄 Subject access response - read this before erasing. Look for the\n")
 		fmt.Printf("      source they got your data from and the recipients they sold it to.\n")
 	}
-	// Both of these need a data edit that this scan deliberately doesn't
-	// make for you - say which command makes it, or the classification is
-	// just a line of output that scrolls past.
+	// Both of these need a follow-up action that this scan deliberately
+	// doesn't make for you - say which command makes it, or the
+	// classification is just a line of output that scrolls past.
 	if r.Type == inbox.ResponseB2BOnly {
 		fmt.Printf("   🏢 Says it holds no consumer data at all. If that checks out, tag it so\n")
-		fmt.Printf("      nothing is ever sent again: add `tags: [b2b-only]` to %s in\n", r.Email.BrokerID)
-		fmt.Printf("      data/brokers.yaml, with a note quoting the reply.\n")
+		fmt.Printf("      nothing is ever sent again:\n")
+		fmt.Printf("      eraser tag-broker %s b2b-only --note \"their reply said ...\"\n", r.Email.BrokerID)
 	}
 	if r.Type == inbox.ResponseBounced {
 		fmt.Printf("   📭 Delivery failed - nothing will arrive. Run `eraser cleanup-bounces` to\n")

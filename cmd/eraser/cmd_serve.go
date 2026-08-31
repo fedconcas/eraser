@@ -53,7 +53,8 @@ func runServe(port int) error {
 		}
 	}
 
-	brokerDB, err := broker.LoadFromFile(resolveBrokerPath())
+	brokerPath := resolveBrokerPath()
+	brokerDB, err := broker.LoadFromFile(brokerPath)
 	if err != nil {
 		return fmt.Errorf("failed to load brokers: %w", err)
 	}
@@ -72,7 +73,7 @@ func runServe(port int) error {
 	}
 
 	// Create and start web server
-	server, err := web.NewServer(port, cfg, configPath, brokerDB, store, tmplEngine)
+	server, err := web.NewServer(port, cfg, configPath, brokerPath, brokerDB, store, tmplEngine)
 	if err != nil {
 		return fmt.Errorf("failed to create web server: %w", err)
 	}

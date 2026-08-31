@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -88,9 +89,27 @@ const (
 	// requests by email and requires its web form. Still a live target -
 	// just one you action through OptOutURL, not SMTP.
 	TagFormOnly = "form-only"
+	// TagUSDataOnly marks a company that told us it only holds data on US
+	// customers. For this fork's EU user there is nothing of theirs to
+	// erase, so nothing to send - same disposition as b2b-only, different
+	// reason, kept distinct so the audit trail says which one it was.
+	TagUSDataOnly = "us-data-only"
 )
 
-var DispositionTags = []string{TagB2BOnly, TagFormOnly}
+var DispositionTags = []string{TagB2BOnly, TagFormOnly, TagUSDataOnly}
+
+// IsDispositionTag reports whether tag (case-insensitive) is part of the
+// closed DispositionTags vocabulary. Callers validating user input must
+// reject anything else rather than treating it as "no disposition".
+func IsDispositionTag(tag string) bool {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	for _, t := range DispositionTags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
+}
 
 // HasTag reports whether b carries tag (case-insensitive).
 func (b Broker) HasTag(tag string) bool {
@@ -117,7 +136,7 @@ func (b Broker) Sendable() bool {
 	if strings.TrimSpace(b.Email) == "" {
 		return false
 	}
-	return !b.HasTag(TagB2BOnly) && !b.HasTag(TagFormOnly)
+	return !b.HasTag(TagB2BOnly) && !b.HasTag(TagFormOnly) && !b.HasTag(TagUSDataOnly)
 }
 
 // NotSendableReason explains a false Sendable() in words fit for a UI or a
@@ -126,12 +145,49 @@ func (b Broker) NotSendableReason() string {
 	switch {
 	case b.HasTag(TagB2BOnly):
 		return "B2B only - holds no consumer data"
+	case b.HasTag(TagUSDataOnly):
+		return "Only holds data on US customers"
 	case b.HasTag(TagFormOnly):
 		return "Accepts requests only through their web form"
 	case strings.TrimSpace(b.Email) == "":
 		return "No email on file"
 	}
 	return ""
+}
+
+// AddTag adds tag (canonical lowercase) unless already present. Returns
+// whether the tag list changed. It appends into a CLONED slice: Broker
+// structs are shared by value between copy-on-write snapshots of the
+// broker database (see Server.mutateBrokers in internal/web), and
+// appending into a shared backing array could corrupt a snapshot an
+// in-flight reader is holding.
+func (b *Broker) AddTag(tag string) bool {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if tag == "" || b.HasTag(tag) {
+		return false
+	}
+	b.Tags = append(slices.Clone(b.Tags), tag)
+	return true
+}
+
+// RemoveTag drops tag (case-insensitive) if present and returns whether the
+// tag list changed. Also clones, for the same reason as AddTag.
+func (b *Broker) RemoveTag(tag string) bool {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	out := make([]string, 0, len(b.Tags))
+	removed := false
+	for _, t := range b.Tags {
+		if strings.ToLower(strings.TrimSpace(t)) == tag {
+			removed = true
+			continue
+		}
+		out = append(out, t)
+	}
+	if !removed {
+		return false
+	}
+	b.Tags = out
+	return true
 }
 
 // Sendable filters list down to the brokers an email may actually go to.

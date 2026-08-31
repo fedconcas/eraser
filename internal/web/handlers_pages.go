@@ -27,7 +27,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"Title":         "Dashboard",
 		"TemplateName":  templateLabel(cfg),
 		"Profile":       active.Profile,
-		"BrokerCount":   len(s.brokerDB.Brokers),
+		"BrokerCount":   len(s.getBrokerDB().Brokers),
 		"RecentHistory": s.getRecentHistory(active.ID, 10),
 		"Stats":         s.getStats(active.ID),
 		"PipelineStats": s.getPipelineStats(active.ID),
@@ -71,6 +71,7 @@ func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
 		Status:       r.URL.Query().Get("status"),
 		MissingEmail: r.URL.Query().Get("missing_email") == "true",
 		Tag:          r.URL.Query().Get("tag"),
+		NonSendable:  r.URL.Query().Get("non_sendable") == "true",
 	}
 
 	brokers := s.getBrokersWithStatus(s.activeProfile(r).ID, q)
@@ -78,22 +79,27 @@ func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
 	dailyLimit := effectiveDailyLimit(s.getConfig())
 
 	data := map[string]interface{}{
-		"Title":        "Data Brokers",
-		"Brokers":      brokers,
-		"Categories":   s.getUniqueCategories(),
-		"Tags":         s.getDispositionTags(),
-		"Regions":      s.getUniqueRegions(),
-		"Priorities":   broker.Priorities,
-		"Search":       q.Search,
-		"Category":     q.Category,
-		"Region":       q.Region,
-		"Priority":     q.Priority,
-		"Status":       q.Status,
-		"MissingEmail": q.MissingEmail,
-		"Tag":          q.Tag,
-		"Total":        len(s.brokerDB.Brokers),
-		"Filtered":     len(brokers),
-		"DailyLimit":   dailyLimit,
+		"Title":      "Data Brokers",
+		"Brokers":    brokers,
+		"Categories": s.getUniqueCategories(),
+		"Tags":       s.getDispositionTags(),
+		// Same vocabulary, also read by the per-row tag select inside
+		// partials/broker-list.html - the fragment endpoints pass this exact
+		// key, so the page render has to provide it too.
+		"DispositionTags": broker.DispositionTags,
+		"Regions":         s.getUniqueRegions(),
+		"Priorities":      broker.Priorities,
+		"Search":          q.Search,
+		"Category":        q.Category,
+		"Region":          q.Region,
+		"Priority":        q.Priority,
+		"Status":          q.Status,
+		"MissingEmail":    q.MissingEmail,
+		"Tag":             q.Tag,
+		"NonSendable":     q.NonSendable,
+		"Total":           len(s.getBrokerDB().Brokers),
+		"Filtered":        len(brokers),
+		"DailyLimit":      dailyLimit,
 		// Which request the send button will actually send, and as whom.
 		// Without these the page's one destructive control gave no clue
 		// whether it was about to cite GDPR Article 17 or CCPA.

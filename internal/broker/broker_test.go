@@ -300,6 +300,7 @@ func TestSendableGate(t *testing.T) {
 		{"no address", Broker{ID: "b"}, false, "No email on file"},
 		{"b2b-only outranks a valid address", Broker{ID: "c", Email: "privacy@c.example", Tags: []string{TagB2BOnly}}, false, "B2B only - holds no consumer data"},
 		{"form-only outranks a valid address", Broker{ID: "d", Email: "privacy@d.example", Tags: []string{TagFormOnly}}, false, "Accepts requests only through their web form"},
+		{"us-data-only outranks a valid address", Broker{ID: "g", Email: "privacy@g.example", Tags: []string{TagUSDataOnly}}, false, "Only holds data on US customers"},
 		{"tag matching is case-insensitive", Broker{ID: "e", Email: "privacy@e.example", Tags: []string{"B2B-Only"}}, false, "B2B only - holds no consumer data"},
 		{"unrelated tags don't block a send", Broker{ID: "f", Email: "privacy@f.example", Tags: []string{"verified-2026"}}, true, ""},
 	}
@@ -327,6 +328,69 @@ func TestSendableGate(t *testing.T) {
 // If you are deliberately retiring a broker, delete its line from
 // testdata/shipped-broker-ids.txt in the same commit, and say in the commit
 // message what happens to its history rows.
+func TestIsDispositionTag(t *testing.T) {
+	for _, tag := range DispositionTags {
+		if !IsDispositionTag(tag) {
+			t.Errorf("IsDispositionTag(%q) = false, want true", tag)
+		}
+		if !IsDispositionTag(strings.ToUpper(tag)) {
+			t.Errorf("IsDispositionTag(%q) = false, want true (case-insensitive)", strings.ToUpper(tag))
+		}
+	}
+	if IsDispositionTag("b2b_only") || IsDispositionTag("us-only") || IsDispositionTag("formonly") || IsDispositionTag("") {
+		t.Error("IsDispositionTag accepted a value outside the closed vocabulary")
+	}
+	if !IsDispositionTag(" b2b-only ") {
+		t.Error("IsDispositionTag should trim surrounding whitespace")
+	}
+}
+
+func TestAddRemoveTag(t *testing.T) {
+	b := Broker{ID: "x", Email: "privacy@x.example"}
+
+	if changed := b.AddTag("B2B-Only"); !changed {
+		t.Fatal("AddTag on a fresh broker should report a change")
+	}
+	if got := b.Tags; len(got) != 1 || got[0] != TagB2BOnly {
+		t.Fatalf("Tags after AddTag = %v, want [%s] stored canonical lowercase", got, TagB2BOnly)
+	}
+	if b.Sendable() {
+		t.Error("broker should not be sendable after AddTag(b2b-only)")
+	}
+
+	if changed := b.AddTag(TagB2BOnly); changed {
+		t.Error("AddTag of an already-present tag must be a no-op")
+	}
+	if changed := b.AddTag(" "); changed {
+		t.Error("AddTag of a blank tag must be a no-op")
+	}
+
+	if changed := b.RemoveTag("b2B-only"); !changed {
+		t.Fatal("RemoveTag should match case-insensitively")
+	}
+	if len(b.Tags) != 0 || !b.Sendable() {
+		t.Errorf("after RemoveTag: Tags=%v Sendable=%v, want empty tags and sendable", b.Tags, b.Sendable())
+	}
+	if changed := b.RemoveTag(TagB2BOnly); changed {
+		t.Error("RemoveTag of an absent tag must be a no-op")
+	}
+}
+
+// AddTag must not write into a backing array shared with another slice:
+// the web server hands out copy-on-write snapshots whose Broker structs
+// share Tags arrays until one of them mutates.
+func TestAddTagDoesNotMutateSharedBackingArray(t *testing.T) {
+	original := Broker{ID: "x", Email: "privacy@x.example", Tags: []string{"verified-2026"}}
+	snapshot := original
+
+	if !original.AddTag(TagB2BOnly) {
+		t.Fatal("AddTag should report a change")
+	}
+	if len(snapshot.Tags) != 1 || snapshot.Tags[0] != "verified-2026" {
+		t.Errorf("snapshot Tags mutated by AddTag on the copy: %v", snapshot.Tags)
+	}
+}
+
 func TestShippedBrokerDatabaseIDsAreStable(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "data", "brokers.yaml"))
 	if err != nil {
@@ -392,7 +456,7 @@ func TestDispositionTagsAreKnown(t *testing.T) {
 		}
 		// A tagged broker must say why, so the decision is auditable and a
 		// future maintainer can tell an evidenced tag from a guess.
-		if (b.HasTag(TagB2BOnly) || b.HasTag(TagFormOnly)) && strings.TrimSpace(b.Notes) == "" {
+		if (b.HasTag(TagB2BOnly) || b.HasTag(TagFormOnly) || b.HasTag(TagUSDataOnly)) && strings.TrimSpace(b.Notes) == "" {
 			t.Errorf("broker %q carries a disposition tag but has no notes explaining it", b.ID)
 		}
 	}

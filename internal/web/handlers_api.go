@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eraser-privacy/eraser/internal/broker"
 	"github.com/eraser-privacy/eraser/internal/history"
 	"github.com/eraser-privacy/eraser/internal/inbox"
 	emaTemplate "github.com/eraser-privacy/eraser/internal/template"
@@ -27,13 +28,15 @@ func (s *Server) handleAPIBrokers(w http.ResponseWriter, r *http.Request) {
 		Status:       r.URL.Query().Get("status"),
 		MissingEmail: r.URL.Query().Get("missing_email") == "true",
 		Tag:          r.URL.Query().Get("tag"),
+		NonSendable:  r.URL.Query().Get("non_sendable") == "true",
 	})
 
 	// Returns broker list as HTML fragment for HTMX
 	s.renderPartial(w, "partials/broker-list.html", map[string]interface{}{
-		"Brokers":  brokers,
-		"Filtered": len(brokers),
-		"Total":    len(s.brokerDB.Brokers),
+		"Brokers":         brokers,
+		"Filtered":        len(brokers),
+		"Total":           len(s.getBrokerDB().Brokers),
+		"DispositionTags": broker.DispositionTags,
 	})
 }
 
@@ -46,7 +49,7 @@ func (s *Server) handleAPIBrokers(w http.ResponseWriter, r *http.Request) {
 // this uses instead of the all-brokers GROUP BY.
 func (s *Server) handleAPIBrokerStatus(w http.ResponseWriter, r *http.Request) {
 	brokerID := chi.URLParam(r, "brokerID")
-	if s.brokerDB.FindByID(brokerID) == nil {
+	if s.getBrokerDB().FindByID(brokerID) == nil {
 		http.Error(w, "Broker not found", http.StatusNotFound)
 		return
 	}
@@ -196,7 +199,7 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create inbox monitor
-	monitor := inbox.NewMonitor(cfg.Inbox, s.brokerDB.Brokers)
+	monitor := inbox.NewMonitor(cfg.Inbox, s.getBrokerDB().Brokers)
 	s.applyContactedBrokerGate(monitor)
 
 	// Connect to IMAP
@@ -418,7 +421,7 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create inbox monitor
-	monitor := inbox.NewMonitor(cfg.Inbox, s.brokerDB.Brokers)
+	monitor := inbox.NewMonitor(cfg.Inbox, s.getBrokerDB().Brokers)
 	s.applyContactedBrokerGate(monitor)
 
 	// Connect to IMAP with longer timeout for full rescan
@@ -628,10 +631,10 @@ func (s *Server) handleAPIReclassify(w http.ResponseWriter, r *http.Request) {
 	// If there are records missing bodies, try to fetch from IMAP
 	cfg := s.getConfig()
 	var bodiesUpdated int
-	if missingBodies > 0 && cfg != nil && cfg.Inbox.Server != "" && s.brokerDB != nil {
+	if missingBodies > 0 && cfg != nil && cfg.Inbox.Server != "" && s.getBrokerDB() != nil {
 		log.Printf("Found %d records missing email bodies, fetching from IMAP...", missingBodies)
 
-		monitor := inbox.NewMonitor(cfg.Inbox, s.brokerDB.Brokers)
+		monitor := inbox.NewMonitor(cfg.Inbox, s.getBrokerDB().Brokers)
 		s.applyContactedBrokerGate(monitor)
 
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)

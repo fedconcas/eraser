@@ -18,11 +18,13 @@ eraser/
 │   │                           # broker path resolution) - each command's own flags and Run
 │   │                           # logic live in their own cmd_*.go file, one per command:
 │   │                           # cmd_init.go, cmd_send.go, cmd_brokers.go (list-brokers/
-│   │                           # add-broker), cmd_status.go, cmd_bounces.go (mark-bounced/
+│   │                           # add-broker/tag-broker), cmd_audit.go (audit-brokers),
+│   │                           # cmd_status.go, cmd_bounces.go (mark-bounced/
 │   │                           # cleanup-bounces), cmd_monitor.go, cmd_pipeline.go,
 │   │                           # cmd_fill.go, cmd_confirm.go, cmd_serve.go, cmd_profile.go
 ├── internal/
-│   ├── broker/broker.go       # Broker struct, YAML loading, filtering, add/remove
+│   ├── broker/broker.go       # Broker struct, YAML loading, filtering, add/remove,
+│   │                           # disposition tags + the Sendable() gate
 │   ├── browser/                # chromedp automation: form filling, CAPTCHA detection,
 │   │                            # confirmation-link clicking, shared broker-domain allowlist
 │   │                            # validation (domain.go)
@@ -31,11 +33,13 @@ eraser/
 │   │   ├── sender.go            # Sender interface + NewSender (SMTP only)
 │   │   └── smtp.go              # SMTP implementation
 │   ├── history/history.go      # SQLite history tracking, pipeline status, per-profile scoping
-│   ├── inbox/                   # IMAP monitoring + reply classification (success/form-required/
-│   │                             # confirmation/rejection/pending/bounced)
+│   ├── inbox/                   # IMAP monitoring + reply classification (9 types: success,
+│   │                             # form_required, confirmation_required, rejected, pending,
+│   │                             # bounced, disclosure, b2b_only, unknown)
 │   ├── template/
 │   │   ├── template.go          # Template rendering engine
-│   │   └── templates/           # Embedded: gdpr.tmpl, ccpa.tmpl, generic.tmpl
+│   │   └── templates/           # Embedded: gdpr.tmpl, ccpa.tmpl, generic.tmpl, uk-erasure.tmpl,
+│   │                             # uk-access.tmpl, uk-combined.tmpl
 │   └── web/
 │       ├── server.go            # Server struct, NewServer, router setup, core render/helper
 │       │                        # methods - handlers themselves live in handlers_*.go, grouped
@@ -51,7 +55,7 @@ eraser/
 └── EU-NOTES.md                  # GDPR/EU-specific setup and customization notes
 ```
 
-CI (`.github/workflows/ci.yml`) runs `go build`/`go vet`/`go test -race` and `golangci-lint` (config: `.golangci.yml`) on every push/PR.
+CI (`.github/workflows/ci.yml`) runs `go build`/`go vet`/a `gofmt -l` check/`go test -race` and `golangci-lint` (config: `.golangci.yml`) on every push/PR.
 
 ## Key Concepts
 
@@ -67,7 +71,7 @@ Each broker in `data/brokers.yaml` (top-level key `brokers:`) has:
 - `priority`: `high`, `medium` or `low` - how much this broker matters to someone trying to get removed. Purely a filter (`--priority`, and the web UI's priority selector); it composes with `category`/`region`/status rather than replacing them, so "high priority people-search brokers" is one query. `send` and the web UI's bulk send also order high-priority brokers first, which matters when `daily_send_limit` truncates a run. See [Broker priority](#broker-priority) for how the shipped values were assigned.
 - `description`: One short sentence on what the company actually does, optional. Rendered as the "What they do" column on the web UI's brokers page so you can tell a people-search site from an ad-tech SSP without leaving the page; empty renders as a dash. Not a filter, and never guessed - an unsourced description is worse than none.
 - `notes`: Free-text, optional - used to record why an entry looks unusual (e.g. "use the form, not email")
-- `tags`: Optional list of *disposition* tags from the closed vocabulary in `broker.DispositionTags` - `b2b-only` (told us it holds no consumer data at all) and `form-only` (holds consumer data but refuses email). Distinct from `category`, which is the sector; see [code-patterns.md](code-patterns.md) for why. `Broker.Sendable()` blocks every send path to a tagged broker, and both the web UI's disposition selector and `list-brokers --tag` filter on them.
+- `tags`: Optional list of *disposition* tags from the closed vocabulary in `broker.DispositionTags` - `b2b-only` (told us it holds no consumer data at all), `us-data-only` (told us it only holds data on US customers) and `form-only` (holds consumer data but refuses email). Distinct from `category`, which is the sector; see [code-patterns.md](code-patterns.md) for why. `Broker.Sendable()` blocks every send path to a tagged broker, and both the web UI's disposition selector and `list-brokers --tag` filter on them. Tags are applied with `eraser tag-broker <id> <tag>` or the per-row Tag select on the web UI's brokers page (which defaults to showing only sendable brokers; non-sendable ones stay in the data file and surface via "Include non-sendable"). `eraser audit-brokers` supplies the evidence for tagging: website/MX liveness checks that flag defunct brokers, plus `--replies` exports of stored broker replies for offline classification.
 
 #### The `non-broker` category
 
@@ -114,15 +118,18 @@ None of these agree with each other, which is the point of scoring across them r
 **Brokers with `email: ""`** can't be reached by `send` at all - they only take requests through a web form/DSR portal, or the address bounced and was cleared by `cleanup-bounces`/`mark-bounced`. Use `eraser list-brokers --missing-email` to see them; they need manual follow-up outside the tool.
 
 ### Templates
-Three email templates (`internal/template/templates/`):
-- **GDPR**: Invokes EU Article 17 "Right to Erasure" - the correct default for EU users
+Six email templates (`internal/template/templates/`, full list from `template.TemplateNames()`):
+- **GDPR**: Invokes EU Article 17 "Right to Erasure" - the correct default for EU users (and the fork's default when no `template:` is configured)
 - **CCPA**: Invokes California Consumer Privacy Act
 - **Generic**: General privacy request referencing multiple laws
+- **UK Erasure / UK Access / UK Combined**: UK GDPR erasure, subject-access, and combined erasure+access requests
+
+Each template maps to a request type via `template.RequestTypeFor`: `uk-access` → `access`, `uk-combined` → `combined`, everything else → `erasure`. The resend cooldown is keyed on `(profile, broker, request type)`, so sending a GDPR erasure request does not suppress a later UK subject-access request to the same broker.
 
 ### Flow
 1. Load user config from `~/.eraser/config.yaml`, resolve the active profile (see [multi-profile.md](multi-profile.md))
 2. Load brokers from `data/brokers.yaml`
 3. Filter by region and exclusions (`broker.Filter`), then by `--priority` if given (`broker.FilterByPriority`), then order high-priority first (`broker.SortByPriority`)
 4. For each broker, render email template with profile + broker data
-5. Send via SMTP, capped at `options.daily_send_limit` per rolling 24h window (`send` and the web UI's job sender both read this same config value - keep them in sync, see [code-patterns.md](code-patterns.md#known-quirks) for the history)
-6. Record result in SQLite history, tagged with the active profile's ID; `send` skips brokers already successfully emailed in the last 25 days (per profile) so re-running is always safe
+5. Send via SMTP, capped at `options.daily_send_limit`. The CLI enforces it as a rolling 24h window counted from history (`CountSentSince` in `cmd_send.go`); the web UI's job sender reads the same config value but applies it per job run only (`processSendJob` in `handlers_jobs.go`), not rolling, so it doesn't count sends made through other paths in the same window - known divergence, see [../architecture/architecture-review.md](../architecture/architecture-review.md) finding F1 and [code-patterns.md](code-patterns.md#known-quirks)
+6. Record result in SQLite history, tagged with the active profile's ID and the request type (`erasure`/`access`/`combined`); `send` skips brokers already successfully emailed the same request type in the last 25 days (keyed on profile + broker + request type, `history.SendKey`) so re-running is always safe

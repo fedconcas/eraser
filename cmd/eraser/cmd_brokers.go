@@ -6,6 +6,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/eraser-privacy/eraser/internal/broker"
 	"github.com/spf13/cobra"
@@ -175,6 +176,88 @@ func runAddBroker() error {
 
 	fmt.Println()
 	fmt.Printf("✅ Added %s to broker database\n", b.Name)
+
+	return nil
+}
+
+func tagBrokerCmd() *cobra.Command {
+	var remove bool
+	var note string
+
+	cmd := &cobra.Command{
+		Use:   "tag-broker <broker-id> <tag>",
+		Short: "Add or remove a disposition tag on a broker",
+		Long: `Tag a broker with a disposition that controls whether it receives
+requests: b2b-only (holds no consumer data), us-data-only (only holds data
+on US customers), or form-only (requires its web form). Tagging makes a
+broker unsendable; --remove makes it sendable again.`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runTagBroker(args[0], args[1], note, remove)
+		},
+	}
+
+	cmd.Flags().BoolVar(&remove, "remove", false, "Remove the tag instead of adding it")
+	cmd.Flags().StringVar(&note, "note", "", "Notes to record on the broker - quote the evidence (their reply, a policy page)")
+
+	return cmd
+}
+
+func runTagBroker(id, tag, note string, remove bool) error {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if !broker.IsDispositionTag(tag) {
+		return fmt.Errorf("invalid tag %q: must be one of %s", tag, strings.Join(broker.DispositionTags, ", "))
+	}
+
+	brokerDB, err := broker.LoadFromFile(resolveBrokerPath())
+	if err != nil {
+		return fmt.Errorf("failed to load brokers: %w", err)
+	}
+
+	b := brokerDB.FindByID(id)
+	if b == nil {
+		return fmt.Errorf("broker %q not found", id)
+	}
+
+	var changed bool
+	if remove {
+		changed = b.RemoveTag(tag)
+	} else {
+		changed = b.AddTag(tag)
+	}
+	if !changed {
+		// Deliberately not saving: Save renormalizes the whole file, so a
+		// no-op write would churn brokers.yaml for nothing.
+		if remove {
+			fmt.Printf("ℹ️  %s does not carry the %s tag - nothing to remove\n", b.Name, tag)
+		} else {
+			fmt.Printf("ℹ️  %s already carries the %s tag - nothing to change\n", b.Name, tag)
+		}
+		return nil
+	}
+
+	if strings.TrimSpace(note) != "" {
+		b.Notes = note
+	} else if !remove && strings.TrimSpace(b.Notes) == "" {
+		// A tagged broker must say why (the data file is tested for it), so
+		// a tag with no --note still gets an audit line.
+		b.Notes = fmt.Sprintf("Tagged %s via CLI on %s.", tag, time.Now().Format("Jan 2, 2006"))
+	}
+
+	if err := brokerDB.SaveWithBackup(resolveBrokerPath()); err != nil {
+		return fmt.Errorf("failed to save brokers: %w", err)
+	}
+
+	if remove {
+		fmt.Printf("✅ Removed the %s tag from %s\n", tag, b.Name)
+	} else {
+		fmt.Printf("✅ Tagged %s as %s\n", b.Name, tag)
+	}
+	if reason := b.NotSendableReason(); reason != "" {
+		fmt.Printf("   ⚠️  %s will not receive requests: %s\n", b.Name, reason)
+	} else {
+		fmt.Printf("   %s is sendable again\n", b.Name)
+	}
 
 	return nil
 }

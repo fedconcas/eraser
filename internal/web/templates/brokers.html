@@ -96,7 +96,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="keyup changed delay:300ms"
                     hx-target="#broker-list"
-                    hx-include="[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
+                    hx-include="[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
                 >
             </div>
 
@@ -108,7 +108,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
+                    hx-include="#broker-search,[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
                 >
                     <option value="">All Statuses</option>
                     <option value="pending" {{if eq $.Status "pending"}}selected{{end}}>Pending</option>
@@ -121,7 +121,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
+                    hx-include="#broker-search,[name='status'],[name='priority'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
                 >
                     <option value="">All Categories</option>
                     {{range .Categories}}
@@ -134,7 +134,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email']"
+                    hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='non_sendable']"
                 >
                     <option value="">All Dispositions</option>
                     {{range .Tags}}
@@ -147,7 +147,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='category'],[name='region'],[name='missing_email'],[name='tag']"
+                    hx-include="#broker-search,[name='status'],[name='category'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
                 >
                     <option value="">All Priorities</option>
                     {{range .Priorities}}
@@ -160,7 +160,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='missing_email'],[name='tag']"
+                    hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='missing_email'],[name='tag'],[name='non_sendable']"
                 >
                     <option value="">All Regions</option>
                     {{range .Regions}}
@@ -176,9 +176,26 @@
                         hx-get="/api/brokers"
                         hx-trigger="change"
                         hx-target="#broker-list"
-                        hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='tag']"
+                        hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='tag'],[name='non_sendable']"
                     >
                     Missing email only
+                </label>
+                <!-- Opt-in to everything the default view hides: brokers
+                     marked b2b-only / us-data-only / form-only, brokers with
+                     no address on file, and brokers you excluded yourself
+                     (those rows carry an Include button to undo it). -->
+                <label class="flex items-center gap-2 text-sm text-secondary select-none cursor-pointer whitespace-nowrap">
+                    <input
+                        type="checkbox"
+                        name="non_sendable"
+                        value="true"
+                        {{if .NonSendable}}checked{{end}}
+                        hx-get="/api/brokers"
+                        hx-trigger="change"
+                        hx-target="#broker-list"
+                        hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
+                    >
+                    Include non-sendable
                 </label>
             </div>
         </div>
@@ -218,7 +235,8 @@ function currentFilters() {
         priority: document.querySelector('[name="priority"]').value,
         region: document.querySelector('[name="region"]').value,
         tag: document.querySelector('[name="tag"]').value,
-        missing_email: document.querySelector('[name="missing_email"]').checked ? 'true' : ''
+        missing_email: document.querySelector('[name="missing_email"]').checked ? 'true' : '',
+        non_sendable: document.querySelector('[name="non_sendable"]').checked ? 'true' : ''
     };
 }
 
