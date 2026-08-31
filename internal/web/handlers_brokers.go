@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/eraser-privacy/eraser/internal/broker"
 	"github.com/eraser-privacy/eraser/internal/config"
@@ -82,6 +81,8 @@ func (s *Server) handleAPITagBroker(w http.ResponseWriter, r *http.Request) {
 
 	// The vocabulary is closed: a typo must fail loudly, not read as "no
 	// disposition" and quietly put the broker back in the send list.
+	// broker.ApplyDisposition validates it again inside the write, but this
+	// check is what turns a bad tag into a 400 with the valid list.
 	if !broker.IsDispositionTag(tag) {
 		http.Error(w, fmt.Sprintf("Unknown tag %q; valid tags: %s", tag, strings.Join(broker.DispositionTags, ", ")), http.StatusBadRequest)
 		return
@@ -96,18 +97,10 @@ func (s *Server) handleAPITagBroker(w http.ResponseWriter, r *http.Request) {
 		if b == nil {
 			return false, errBrokerNotFound
 		}
-		var changed bool
-		if action == "add" {
-			changed = b.AddTag(tag)
-			// A tagged broker must say why (the shipped-data test enforces
-			// this), so fill in an audit note when there isn't one yet.
-			if changed && strings.TrimSpace(b.Notes) == "" {
-				b.Notes = fmt.Sprintf("Tagged %s via web UI on %s.", tag, time.Now().Format("Jan 2, 2006"))
-			}
-		} else {
-			changed = b.RemoveTag(tag)
-		}
-		return changed, nil
+		// Same helper the CLI's tag-broker calls, so the two doors apply
+		// identical rules (validation, the add/remove switch, and the audit
+		// note a tagged broker must carry).
+		return broker.ApplyDisposition(b, tag, action == "remove", "", "web UI")
 	})
 	if err == errBrokerNotFound {
 		http.Error(w, "Broker not found", http.StatusNotFound)
@@ -140,50 +133,43 @@ func (s *Server) handleAPIExcludeBroker(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Load-copy-mutate-store, same as handleSettingsInbox: a concurrent
-	// reader may be holding the pointer getConfig() returns.
-	cfg := s.getConfig()
-	if cfg == nil {
-		cfg = &config.Config{}
-	}
-	newCfg := *cfg
-
 	// The exclusion list is matched against both broker IDs and broker
 	// names (getBrokersWithStatus, and broker.Filter on the CLI side), so
-	// "include" must remove either spelling, and we remember the name
-	// before mutating.
+	// "include" must remove either spelling, and we read the name before
+	// the write.
 	var brokerName string
 	if b := s.getBrokerDB().FindByID(brokerID); b != nil {
 		brokerName = b.Name
 	}
 
-	excluded := make([]string, 0, len(newCfg.Options.ExcludedBrokers)+1)
-	seen := make(map[string]bool, len(newCfg.Options.ExcludedBrokers))
-	for _, e := range newCfg.Options.ExcludedBrokers {
-		key := strings.ToLower(strings.TrimSpace(e))
-		if key == strings.ToLower(brokerID) || (brokerName != "" && key == strings.ToLower(brokerName)) {
-			continue
+	// mutateConfig, not a bare load-copy-save-store: two Exclude clicks in
+	// flight together used to each copy the same config snapshot, and
+	// whichever saved second dropped the other's exclusion - leaving a
+	// broker the user had excluded still in the next bulk send.
+	err := s.mutateConfig(func(cfg *config.Config) error {
+		excluded := make([]string, 0, len(cfg.Options.ExcludedBrokers)+1)
+		seen := make(map[string]bool, len(cfg.Options.ExcludedBrokers))
+		for _, e := range cfg.Options.ExcludedBrokers {
+			key := strings.ToLower(strings.TrimSpace(e))
+			if key == strings.ToLower(brokerID) || (brokerName != "" && key == strings.ToLower(brokerName)) {
+				continue
+			}
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			excluded = append(excluded, e)
 		}
-		if seen[key] {
-			continue
+		if action == "exclude" {
+			excluded = append(excluded, brokerID)
 		}
-		seen[key] = true
-		excluded = append(excluded, e)
-	}
-	if action == "exclude" {
-		excluded = append(excluded, brokerID)
-	}
-	newCfg.Options.ExcludedBrokers = excluded
-
-	if s.configPath == "" {
-		http.Error(w, "config path not set", http.StatusInternalServerError)
+		cfg.Options.ExcludedBrokers = excluded
+		return nil
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := config.Save(s.configPath, &newCfg); err != nil {
-		http.Error(w, "Failed to save configuration: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	s.config.Store(&newCfg)
 
 	s.renderBrokerListFragment(w, r)
 }

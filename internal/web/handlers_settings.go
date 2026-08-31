@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -122,23 +123,15 @@ func (s *Server) handleSettingsTemplate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Load-copy-mutate-store, matching handleSettingsInbox: a concurrent
-	// reader (another handler, or a running send job) may be holding the
-	// pointer returned by getConfig.
-	cfg := s.getConfig()
-	if cfg == nil {
-		cfg = &config.Config{}
-	}
-	newCfg := *cfg
-	newCfg.Options.Template = name
-
-	if err := config.Save(s.configPath, &newCfg); err != nil {
+	if err := s.mutateConfig(func(cfg *config.Config) error {
+		cfg.Options.Template = name
+		return nil
+	}); err != nil {
 		s.renderSettings(w, r, map[string]interface{}{
 			"TemplateMessage": "Failed to save configuration: " + err.Error(), "TemplateSuccess": false,
 		})
 		return
 	}
-	s.config.Store(&newCfg)
 
 	s.renderSettings(w, r, map[string]interface{}{
 		"TemplateMessage": fmt.Sprintf("Saved. Removal requests will use %q.", name),
@@ -169,73 +162,77 @@ func (s *Server) handleSettingsInbox(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("inbox_email")
 	password := r.FormValue("inbox_password")
 
-	// Update config with inbox settings. Load-copy-mutate-store rather than
-	// mutating the struct returned by getConfig() in place - a concurrent
-	// reader (another handler, or a background send-job goroutine) may be
-	// holding that exact pointer.
-	cfg := s.getConfig()
-	if cfg == nil {
-		cfg = &config.Config{}
-	}
-	newCfg := *cfg
+	// One serialized read-modify-write (mutateConfig), rather than mutating
+	// the struct returned by getConfig() in place - a concurrent reader
+	// (another handler, or a background send-job goroutine) may be holding
+	// that exact pointer, and a concurrent writer would otherwise drop one
+	// of the two saves.
+	err := s.mutateConfig(func(cfg *config.Config) error {
+		// An empty password means "keep the stored one", not "clear it". The
+		// form no longer renders the saved password back into the page (it
+		// would be readable by anything that can reach this origin), so an
+		// unchanged field arrives blank on every save - without this,
+		// editing just the email address would wipe the working IMAP
+		// credential.
+		pw := password
+		if pw == "" {
+			pw = cfg.Inbox.Password
+		}
 
-	// An empty password means "keep the stored one", not "clear it". The
-	// form no longer renders the saved password back into the page (it would
-	// be readable by anything that can reach this origin), so an unchanged
-	// field arrives blank on every save - without this, editing just the
-	// email address would wipe the working IMAP credential.
-	if password == "" {
-		password = newCfg.Inbox.Password
-	}
+		// Validate required fields. Checked after the substitution above, so
+		// a genuinely new setup with no password anywhere is still rejected.
+		if email == "" || pw == "" {
+			return errInboxCredentialsRequired
+		}
 
-	// Validate required fields. Checked after the substitution above, so a
-	// genuinely new setup with no password anywhere is still rejected.
-	if email == "" || password == "" {
+		// Start from the existing inbox config (not a blank struct) so a
+		// provider configured by hand in config.yaml (e.g. "outlook") keeps
+		// its own Server/Port/AutoArchive when the user submits this form
+		// just to change their email/password - this form only collects
+		// those two fields (see settings.html), it has no provider selector.
+		inbox := cfg.Inbox
+		inbox.Enabled = true
+		inbox.Email = email
+		inbox.Password = pw
+		// Only fill in Gmail defaults for a brand-new setup or an
+		// already-Gmail config - the IMAP server/port must be set explicitly
+		// here rather than left for config.Load's default-filling to apply,
+		// since this struct is also stored directly into the live,
+		// already-loaded s.config. Leaving these zero-valued produced a
+		// "dial tcp :0" connect error on the next inbox scan until the
+		// process was restarted (config.Load only fills Gmail defaults when
+		// Server=="" during its own load, which doesn't run again until the
+		// server restarts).
+		if inbox.Provider == "" || inbox.Provider == "gmail" {
+			inbox.Provider = "gmail"
+			inbox.Server = "imap.gmail.com"
+			inbox.Port = 993
+		}
+		if inbox.Folder == "" {
+			inbox.Folder = "INBOX"
+		}
+		if inbox.ArchiveFolder == "" {
+			inbox.ArchiveFolder = "Eraser"
+		}
+		cfg.Inbox = inbox
+		return nil
+	})
+	switch {
+	case errors.Is(err, errInboxCredentialsRequired):
 		s.renderSettingsWithMessage(w, r, "Email and password are required", false)
 		return
-	}
-
-	// Start from the existing inbox config (not a blank struct) so a
-	// provider configured by hand in config.yaml (e.g. "outlook") keeps its
-	// own Server/Port/AutoArchive when the user submits this form just to
-	// change their email/password - this form only collects those two
-	// fields (see settings.html), it has no provider selector.
-	inbox := newCfg.Inbox
-	inbox.Enabled = true
-	inbox.Email = email
-	inbox.Password = password
-	// Only fill in Gmail defaults for a brand-new setup or an
-	// already-Gmail config - the IMAP server/port must be set explicitly
-	// here rather than left for config.Load's default-filling to apply,
-	// since this struct is also stored directly into the live,
-	// already-loaded s.config via s.config.Store below. Leaving these
-	// zero-valued produced a "dial tcp :0" connect error on the next
-	// inbox scan until the process was restarted (config.Load only fills
-	// Gmail defaults when Server=="" during its own load, which doesn't
-	// run again until the server restarts).
-	if inbox.Provider == "" || inbox.Provider == "gmail" {
-		inbox.Provider = "gmail"
-		inbox.Server = "imap.gmail.com"
-		inbox.Port = 993
-	}
-	if inbox.Folder == "" {
-		inbox.Folder = "INBOX"
-	}
-	if inbox.ArchiveFolder == "" {
-		inbox.ArchiveFolder = "Eraser"
-	}
-	newCfg.Inbox = inbox
-
-	// Save config
-	if err := config.Save(s.configPath, &newCfg); err != nil {
+	case err != nil:
 		s.renderSettingsWithMessage(w, r, "Failed to save configuration: "+err.Error(), false)
 		return
 	}
 
-	s.config.Store(&newCfg)
-
 	s.renderSettingsWithMessage(w, r, "Inbox monitoring enabled successfully!", true)
 }
+
+// errInboxCredentialsRequired is the inbox form's validation failure,
+// reported out of the config write so the handler can render its own message
+// without the write having happened.
+var errInboxCredentialsRequired = errors.New("email and password are required")
 
 func (s *Server) renderSettingsWithMessage(w http.ResponseWriter, r *http.Request, message string, success bool) {
 	// Routed through renderSettings so an inbox save still renders the

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/eraser-privacy/eraser/internal/broker"
@@ -284,5 +285,93 @@ func TestHandleAPISendOneRefusesExcludedBroker(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "Excluded") {
 		t.Errorf("response should say the broker is excluded, got: %s", w.Body.String())
+	}
+}
+
+// TestHandleAPIExcludeBrokerConcurrent pins the lost-update fix: four
+// exclusions posted at once each used to copy the same config snapshot, so
+// whichever saved last won and the other three brokers silently stayed in
+// the send list - with config.yaml and the in-memory config disagreeing
+// about which. Every exclusion must survive, in memory and on disk.
+func TestHandleAPIExcludeBrokerConcurrent(t *testing.T) {
+	brokerPath := writeTestBrokerFile(t)
+	s := newTestServerWithBrokerFile(t, testConfig(), brokerPath)
+	s.configPath = filepath.Join(t.TempDir(), "config.yaml")
+	if err := config.Save(s.configPath, s.getConfig()); err != nil {
+		t.Fatalf("seed config.yaml: %v", err)
+	}
+
+	ids := []string{"spokeo", "demandscience", "acxiom", "epsilon"}
+	var wg sync.WaitGroup
+	for _, id := range ids {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			w := postBrokerAction(t, s, id, "/api/brokers/"+id+"/exclude", url.Values{"action": {"exclude"}})
+			if w.Code != http.StatusOK {
+				t.Errorf("exclude %s = %d: %s", id, w.Code, w.Body.String())
+			}
+		}(id)
+	}
+	wg.Wait()
+
+	inMemory := broker.ToSet(s.getConfig().Options.ExcludedBrokers)
+	cfg, err := config.Load(s.configPath)
+	if err != nil {
+		t.Fatalf("reload config: %v", err)
+	}
+	onDisk := broker.ToSet(cfg.Options.ExcludedBrokers)
+	for _, id := range ids {
+		if !inMemory[id] {
+			t.Errorf("%s missing from the in-memory exclusion list %v", id, s.getConfig().Options.ExcludedBrokers)
+		}
+		if !onDisk[id] {
+			t.Errorf("%s missing from excluded_brokers on disk %v", id, cfg.Options.ExcludedBrokers)
+		}
+	}
+}
+
+// TestMutateBrokersKeepsOutOfProcessEdits covers the other half of the same
+// hazard on the broker file: `eraser tag-broker` writes brokers.yaml while
+// `eraser serve` is running. The server used to publish its startup snapshot
+// over the top of that edit on the next web action, quietly un-retiring a
+// broker the user had classified.
+func TestMutateBrokersKeepsOutOfProcessEdits(t *testing.T) {
+	brokerPath := writeTestBrokerFile(t)
+	s := newTestServerWithBrokerFile(t, testConfig(), brokerPath)
+
+	// Out-of-process edit: tag spokeo the way the CLI would.
+	db, err := broker.LoadFromFile(brokerPath)
+	if err != nil {
+		t.Fatalf("load brokers: %v", err)
+	}
+	if _, err := broker.ApplyDisposition(db.FindByID("spokeo"), broker.TagB2BOnly, false, "their reply said consumer data is not held", "CLI"); err != nil {
+		t.Fatalf("ApplyDisposition: %v", err)
+	}
+	if err := db.Save(brokerPath); err != nil {
+		t.Fatalf("save brokers: %v", err)
+	}
+
+	// An unrelated web action on a different broker must not roll it back.
+	w := postBrokerAction(t, s, "demandscience", "/api/brokers/demandscience/tag", url.Values{
+		"action": {"add"},
+		"tag":    {broker.TagUSDataOnly},
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("tag = %d, want 200: %s", w.Code, w.Body.String())
+	}
+
+	reloaded, err := broker.LoadFromFile(brokerPath)
+	if err != nil {
+		t.Fatalf("reload brokers: %v", err)
+	}
+	if b := reloaded.FindByID("spokeo"); b == nil || !b.HasTag(broker.TagB2BOnly) {
+		t.Errorf("the CLI's tag was clobbered by the web write: %+v", b)
+	}
+	if b := s.getBrokerDB().FindByID("spokeo"); b == nil || !b.HasTag(broker.TagB2BOnly) {
+		t.Errorf("in-memory snapshot did not pick up the out-of-process tag: %+v", b)
+	}
+	if b := reloaded.FindByID("demandscience"); b == nil || !b.HasTag(broker.TagUSDataOnly) {
+		t.Errorf("the web write itself did not persist: %+v", b)
 	}
 }

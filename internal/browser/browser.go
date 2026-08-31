@@ -14,6 +14,12 @@ import (
 	"github.com/eraser-privacy/eraser/internal/config"
 )
 
+// UserAgent is the browser identity every outbound request in this codebase
+// presents. A bare Go client gets bot-blocked by plenty of otherwise-live
+// sites, and the string is shared rather than copied so bumping it to dodge
+// a blocker fixes every caller at once instead of one.
+const UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
 // Browser wraps chromedp for headless Chrome automation
 type Browser struct {
 	allocCtx       context.Context
@@ -43,7 +49,7 @@ func DefaultConfig() BrowserConfig {
 		Headless:      true,
 		Timeout:       60 * time.Second, // Increased from 30s - many broker sites are slow
 		ScreenshotDir: "",
-		UserAgent:     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+		UserAgent:     UserAgent,
 		WindowWidth:   1920,
 		WindowHeight:  1080,
 	}

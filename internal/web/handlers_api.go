@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eraser-privacy/eraser/internal/broker"
 	"github.com/eraser-privacy/eraser/internal/history"
 	"github.com/eraser-privacy/eraser/internal/inbox"
 	emaTemplate "github.com/eraser-privacy/eraser/internal/template"
@@ -19,27 +18,12 @@ import (
 
 // API handlers
 
+// handleAPIBrokers serves the brokers table as an HTMX fragment. Identical
+// to what the row actions re-render afterwards, so it is the same function:
+// brokerQueryFromForm reads the URL query on a GET, and the partial's data
+// map only has to be kept right in one place.
 func (s *Server) handleAPIBrokers(w http.ResponseWriter, r *http.Request) {
-	brokers := s.getBrokersWithStatus(s.activeProfile(r).ID, brokerQuery{
-		Search:       r.URL.Query().Get("search"),
-		Category:     r.URL.Query().Get("category"),
-		Region:       r.URL.Query().Get("region"),
-		Priority:     r.URL.Query().Get("priority"),
-		Status:       r.URL.Query().Get("status"),
-		MissingEmail: r.URL.Query().Get("missing_email") == "true",
-		Tag:          r.URL.Query().Get("tag"),
-		NonSendable:  r.URL.Query().Get("non_sendable") == "true",
-	})
-
-	// Returns broker list as HTML fragment for HTMX
-	s.renderPartial(w, "partials/broker-list.html", map[string]interface{}{
-		"Brokers":         brokers,
-		"Filtered":        len(brokers),
-		"Total":           len(s.getBrokerDB().Brokers),
-		"DispositionTags": broker.DispositionTags,
-		"SendableCount":   len(sendable(brokers)),
-		"OutOfBand":       true,
-	})
+	s.renderBrokerListFragment(w, r)
 }
 
 // handleAPIBrokerStatus returns just the status-badge fragment for one

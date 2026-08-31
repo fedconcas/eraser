@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/eraser-privacy/eraser/internal/broker"
+	"github.com/eraser-privacy/eraser/internal/browser"
 	"github.com/eraser-privacy/eraser/internal/history"
 	"github.com/eraser-privacy/eraser/internal/inbox"
 	"github.com/spf13/cobra"
@@ -47,6 +48,8 @@ hand (or with 'eraser tag-broker') after reviewing the report.
 
 --history lists brokers whose stored replies were classified b2b_only but
 that do not carry the b2b-only tag yet, with the exact command to fix each.
+It reads the history database only: with --history or --replies (and without
+--report) the network sweep above is skipped entirely.
 
 --replies FILE exports every stored broker reply for offline review by a
 cheap LLM - it reads bodies recorded by web inbox scans, flags statements
@@ -94,7 +97,7 @@ type AuditResult struct {
 // not determine" and must never be read as dead.
 type auditChecker interface {
 	WebsiteAlive(ctx context.Context, url string) (bool, error)
-	MXExists(domain string) (bool, error)
+	MXExists(ctx context.Context, domain string) (bool, error)
 }
 
 // auditBrokers fans the broker list out over a worker pool and returns one
@@ -158,7 +161,7 @@ func auditOne(ctx context.Context, b broker.Broker, chk auditChecker) AuditResul
 		}
 	}
 	if domain != "" {
-		ok, err := chk.MXExists(domain)
+		ok, err := chk.MXExists(ctx, domain)
 		if err == nil {
 			v := ok
 			res.MXAlive = &v
@@ -173,29 +176,30 @@ func auditOne(ctx context.Context, b broker.Broker, chk auditChecker) AuditResul
 	}
 	res.Detail = strings.Join(notes, "; ")
 
-	webKnown := res.WebsiteAlive != nil
-	mxKnown := res.MXAlive != nil
+	// Four one-sided facts, so the verdict table below reads as the rule it
+	// is instead of eight overlapping pointer-deref guards. "Dead" and
+	// "live" are both false for a check that was skipped or came back
+	// inconclusive - that asymmetry is the conservative rule: only a
+	// definitive answer can push a broker towards "defunct".
+	webDead := res.WebsiteAlive != nil && !*res.WebsiteAlive
+	webLive := res.WebsiteAlive != nil && *res.WebsiteAlive
+	mxDead := res.MXAlive != nil && !*res.MXAlive
+	mxLive := res.MXAlive != nil && *res.MXAlive
 	switch {
-	case !webKnown && !mxKnown:
-		res.Verdict = verdictUnknown
-	case webKnown && *res.WebsiteAlive && (!mxKnown || *res.MXAlive):
-		// Website alive is enough to call the company live; an unchecked or
-		// healthy MX doesn't change that.
-		res.Verdict = verdictAlive
-	case webKnown && !*res.WebsiteAlive && mxKnown && !*res.MXAlive:
+	case webDead && mxDead:
 		res.Verdict = verdictDefunct
-	case webKnown && !*res.WebsiteAlive && mxKnown && *res.MXAlive:
+	case webDead && mxLive:
 		res.Verdict = verdictWebsiteDead
-	case webKnown && *res.WebsiteAlive && mxKnown && !*res.MXAlive:
+	case mxDead:
+		// Website live, or not conclusively checked: the mail domain is the
+		// only dead half.
 		res.Verdict = verdictEmailDead
-	case !webKnown && mxKnown && !*res.MXAlive:
-		res.Verdict = verdictEmailDead
-	case !webKnown && mxKnown && *res.MXAlive:
+	case webLive || mxLive:
+		// Either half responding is enough to call the company live.
 		res.Verdict = verdictAlive
-	case webKnown && !*res.WebsiteAlive && !mxKnown:
-		// Website dead but mail inconclusive - not enough for "defunct".
-		res.Verdict = verdictUnknown
 	default:
+		// Nothing conclusive, or a dead website with inconclusive mail -
+		// not enough for "defunct".
 		res.Verdict = verdictUnknown
 	}
 	return res
@@ -214,13 +218,20 @@ func emailDomain(email string) string {
 
 // netAuditChecker is the production auditChecker: stdlib HTTP + DNS only.
 type netAuditChecker struct {
-	client *http.Client
+	client  *http.Client
+	timeout time.Duration
 }
 
 func newNetAuditChecker(timeout time.Duration) *netAuditChecker {
 	return &netAuditChecker{
+		timeout: timeout,
 		client: &http.Client{
 			Timeout: timeout,
+			// The URLs come from data/brokers.yaml, which is hand-edited and
+			// bulk-imported - so they get the same guarded dialer the
+			// confirmation-link fetcher uses: no proxy, and no connections
+			// to loopback/private/link-local/metadata addresses.
+			Transport: browser.GuardedTransport(),
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 10 {
 					return errors.New("stopped after 10 redirects")
@@ -246,12 +257,11 @@ func (c *netAuditChecker) WebsiteAlive(ctx context.Context, rawURL string) (bool
 		u.Scheme = "https"
 	}
 
-	// Some servers answer HEAD with 405/501 without being dead, so a
-	// refused HEAD falls back to GET before deciding.
-	status, err := c.fetchStatus(ctx, http.MethodHead, u.String())
-	if err == nil && (status == http.StatusMethodNotAllowed || status == http.StatusNotImplemented) {
-		status, err = c.fetchStatus(ctx, http.MethodGet, u.String())
-	}
+	// Any answer at all - 405 and 501 included - already proves the server
+	// is there, which is the only question this asks, so there is nothing a
+	// follow-up GET could add: it could only turn a proven-live site into
+	// "unknown" if the second request happened to time out.
+	err = c.fetch(ctx, http.MethodHead, u.String())
 	if err != nil {
 		if isTimeout(err) {
 			return false, err // inconclusive
@@ -261,31 +271,38 @@ func (c *netAuditChecker) WebsiteAlive(ctx context.Context, rawURL string) (bool
 	return true, nil
 }
 
-func (c *netAuditChecker) fetchStatus(ctx context.Context, method, url string) (int, error) {
+// fetch reports only whether the server answered at all; the status code is
+// deliberately not returned, because no response code distinguishes a live
+// site from another live site.
+func (c *netAuditChecker) fetch(ctx context.Context, method, url string) error {
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	// A bare Go client gets bot-blocked by plenty of otherwise-live sites;
-	// look like an ordinary browser instead.
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+	req.Header.Set("User-Agent", browser.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode, nil
+	return nil
 }
 
 // MXExists reports whether the domain can receive mail: explicit MX records,
 // or (per the RFC 5321 implicit-MX fallback) an A/AAAA record on the domain
 // itself. Definitive "no such records" answers return false with nil error;
 // transient DNS/network trouble returns an error.
-func (c *netAuditChecker) MXExists(domain string) (bool, error) {
+func (c *netAuditChecker) MXExists(ctx context.Context, domain string) (bool, error) {
 	resolver := net.DefaultResolver
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+	// The caller's --timeout budget, not a hardcoded one: a blackholing
+	// nameserver used to hold a worker for 15s however small --timeout was,
+	// and a cancelled audit could not interrupt a lookup in flight.
+	if c.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
 
 	mx, err := resolver.LookupMX(ctx, domain)
 	if err == nil {
@@ -324,6 +341,35 @@ func runAuditBrokers(workers int, timeout time.Duration, reportFile string, hist
 		return fmt.Errorf("failed to load brokers: %w", err)
 	}
 
+	// --history and --replies are offline reads of the history DB. Running
+	// them used to drag a full several-hundred-broker HTTP+DNS crawl along
+	// first, and then print its verdict table above the answer the user
+	// actually asked for.
+	if (!historyCheck && repliesFile == "") || reportFile != "" {
+		if err := runLivenessSweep(brokerDB, workers, timeout, reportFile); err != nil {
+			return err
+		}
+	}
+
+	if historyCheck {
+		if err := runAuditHistory(brokerDB); err != nil {
+			return err
+		}
+	}
+
+	if repliesFile != "" {
+		if err := exportBrokerReplies(repliesFile, brokerDB); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// runLivenessSweep is the network half of audit-brokers: check every
+// broker's website and mail domain, print the verdict tables and, with
+// --report, write the Markdown checklist.
+func runLivenessSweep(brokerDB *broker.BrokerDatabase, workers int, timeout time.Duration, reportFile string) error {
 	fmt.Println("🔍 Auditing brokers for defunctness")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
@@ -368,18 +414,6 @@ func runAuditBrokers(workers int, timeout time.Duration, reportFile string, hist
 			return fmt.Errorf("failed to write report: %w", err)
 		}
 		fmt.Printf("\n📝 Review checklist written to %s\n", reportFile)
-	}
-
-	if historyCheck {
-		if err := runAuditHistory(brokerDB); err != nil {
-			return err
-		}
-	}
-
-	if repliesFile != "" {
-		if err := exportBrokerReplies(repliesFile, brokerDB); err != nil {
-			return err
-		}
 	}
 
 	return nil

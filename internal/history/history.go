@@ -111,13 +111,13 @@ type BrokerResponse struct {
 	EmailMessageID string
 	MessageKey     string // Deduplication key; derived, set by AddBrokerResponse
 	EmailBody      string // Stored for reclassification
-	FormURL      string // Extracted form URL (if any)
-	ConfirmURL   string // Extracted confirmation URL (if any)
-	Confidence   float64
-	NeedsReview  bool
-	ReceivedAt   time.Time
-	ProcessedAt  time.Time
-	CreatedAt    time.Time
+	FormURL        string // Extracted form URL (if any)
+	ConfirmURL     string // Extracted confirmation URL (if any)
+	Confidence     float64
+	NeedsReview    bool
+	ReceivedAt     time.Time
+	ProcessedAt    time.Time
+	CreatedAt      time.Time
 }
 
 // PendingTask represents a task that needs human intervention

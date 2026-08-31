@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
-	"time"
 
 	"github.com/eraser-privacy/eraser/internal/broker"
 	"github.com/spf13/cobra"
@@ -58,7 +56,7 @@ func runListBrokers(region, category, priority, search, tag string, missingEmail
 
 	// An unknown --tag would match nothing and read as "no such broker" rather
 	// than "no such tag", the same trap --priority already guards against.
-	if tag = strings.ToLower(strings.TrimSpace(tag)); tag != "" && !slices.Contains(broker.DispositionTags, tag) {
+	if tag = strings.ToLower(strings.TrimSpace(tag)); tag != "" && !broker.IsDispositionTag(tag) {
 		return fmt.Errorf("invalid --tag: must be one of %s", strings.Join(broker.DispositionTags, ", "))
 	}
 
@@ -205,9 +203,6 @@ broker unsendable; --remove makes it sendable again.`,
 
 func runTagBroker(id, tag, note string, remove bool) error {
 	tag = strings.ToLower(strings.TrimSpace(tag))
-	if !broker.IsDispositionTag(tag) {
-		return fmt.Errorf("invalid tag %q: must be one of %s", tag, strings.Join(broker.DispositionTags, ", "))
-	}
 
 	brokerDB, err := broker.LoadFromFile(resolveBrokerPath())
 	if err != nil {
@@ -219,11 +214,11 @@ func runTagBroker(id, tag, note string, remove bool) error {
 		return fmt.Errorf("broker %q not found", id)
 	}
 
-	var changed bool
-	if remove {
-		changed = b.RemoveTag(tag)
-	} else {
-		changed = b.AddTag(tag)
+	// Validation, the add/remove switch and the Notes rules all live in
+	// broker.ApplyDisposition, shared with the web UI's tag endpoint.
+	changed, err := broker.ApplyDisposition(b, tag, remove, note, "CLI")
+	if err != nil {
+		return err
 	}
 	if !changed {
 		// Deliberately not saving: Save renormalizes the whole file, so a
@@ -234,14 +229,6 @@ func runTagBroker(id, tag, note string, remove bool) error {
 			fmt.Printf("ℹ️  %s already carries the %s tag - nothing to change\n", b.Name, tag)
 		}
 		return nil
-	}
-
-	if strings.TrimSpace(note) != "" {
-		b.Notes = note
-	} else if !remove && strings.TrimSpace(b.Notes) == "" {
-		// A tagged broker must say why (the data file is tested for it), so
-		// a tag with no --note still gets an audit line.
-		b.Notes = fmt.Sprintf("Tagged %s via CLI on %s.", tag, time.Now().Format("Jan 2, 2006"))
 	}
 
 	if err := brokerDB.SaveWithBackup(resolveBrokerPath()); err != nil {

@@ -292,26 +292,23 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 	// silently discarded all of them, so re-running the wizard on a
 	// configured install wiped the saved inbox app password, any additional
 	// household profiles, and every excluded-broker/region setting.
-	cfg := &config.Config{}
-	if existing := s.getConfig(); existing != nil {
-		*cfg = *existing
-	}
-	cfg.Profile = session.Profile
-	cfg.Email = session.Email
+	if err := s.mutateConfig(func(cfg *config.Config) error {
+		cfg.Profile = session.Profile
+		cfg.Email = session.Email
 
-	// Fill defaults only where nothing is configured yet, so a re-run keeps
-	// whatever the user already chose.
-	if cfg.Options.Template == "" {
-		// This fork is customized for GDPR Article 17 use (see EU-NOTES.md) -
-		// default fresh setups to gdpr, not upstream's US/CCPA-oriented
-		// "generic". Matches the CLI's `init` default.
-		cfg.Options.Template = "gdpr"
-	}
-	if cfg.Options.RateLimitMs == 0 {
-		cfg.Options.RateLimitMs = 2000
-	}
-
-	if err := config.Save(s.configPath, cfg); err != nil {
+		// Fill defaults only where nothing is configured yet, so a re-run
+		// keeps whatever the user already chose.
+		if cfg.Options.Template == "" {
+			// This fork is customized for GDPR Article 17 use (see
+			// EU-NOTES.md) - default fresh setups to gdpr, not upstream's
+			// US/CCPA-oriented "generic". Matches the CLI's `init` default.
+			cfg.Options.Template = "gdpr"
+		}
+		if cfg.Options.RateLimitMs == 0 {
+			cfg.Options.RateLimitMs = 2000
+		}
+		return nil
+	}); err != nil {
 		data := map[string]interface{}{
 			"Title": "Setup - Error",
 			"Error": err.Error(),
@@ -319,9 +316,6 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 		s.renderWithCSRF(w, r, "setup/complete.html", data)
 		return
 	}
-
-	// Update server's config reference
-	s.config.Store(cfg)
 
 	// Clear session - credentials are now saved to config file
 	s.clearSession(w, r)

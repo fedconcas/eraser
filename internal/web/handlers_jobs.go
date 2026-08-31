@@ -63,7 +63,7 @@ func (s *Server) resumePendingJob(state *PersistentJobState) {
 	for _, b := range s.getBrokerDB().Brokers {
 		brokerMap[b.ID] = b
 	}
-	excludedIDs, excludedNames, _ := s.excludedBrokerSets()
+	excludedBrokers, _ := s.excludedBrokerSets()
 
 	var toSend []BrokerWithStatus
 	for _, id := range state.RemainingBrokers {
@@ -80,7 +80,7 @@ func (s *Server) resumePendingJob(state *PersistentJobState) {
 			if !b.Sendable() {
 				continue
 			}
-			if excludedIDs[strings.ToLower(b.ID)] || excludedNames[strings.ToLower(b.Name)] {
+			if brokerExcluded(excludedBrokers, b) {
 				continue
 			}
 			toSend = append(toSend, BrokerWithStatus{Broker: b, Status: "never"})
@@ -148,8 +148,8 @@ func (s *Server) handleAPISendOne(w http.ResponseWriter, r *http.Request) {
 	// skips the list-level filter that normally hides them. The opt-in view
 	// lists excluded brokers so they can be un-excluded, which makes this
 	// gate load-bearing instead of theoretical.
-	excludedIDs, excludedNames, _ := s.excludedBrokerSets()
-	if excludedIDs[strings.ToLower(br.ID)] || excludedNames[strings.ToLower(br.Name)] {
+	excludedBrokers, _ := s.excludedBrokerSets()
+	if brokerExcluded(excludedBrokers, *br) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`<span class="text-amber-600">Excluded in your settings - use the Include button on the brokers page to undo</span>`))
 		return

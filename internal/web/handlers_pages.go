@@ -63,16 +63,9 @@ func templateLabel(cfg *config.Config) string {
 }
 
 func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
-	q := brokerQuery{
-		Search:       r.URL.Query().Get("search"),
-		Category:     r.URL.Query().Get("category"),
-		Region:       r.URL.Query().Get("region"),
-		Priority:     r.URL.Query().Get("priority"),
-		Status:       r.URL.Query().Get("status"),
-		MissingEmail: r.URL.Query().Get("missing_email") == "true",
-		Tag:          r.URL.Query().Get("tag"),
-		NonSendable:  r.URL.Query().Get("non_sendable") == "true",
-	}
+	// r.FormValue falls back to the URL query on a GET, so the page and the
+	// two fragment endpoints all read their filters through one function.
+	q := brokerQueryFromForm(r)
 
 	brokers := s.getBrokersWithStatus(s.activeProfile(r).ID, q)
 
@@ -82,10 +75,14 @@ func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
 		"Title":      "Data Brokers",
 		"Brokers":    brokers,
 		"Categories": s.getUniqueCategories(),
-		"Tags":       s.getDispositionTags(),
-		// Same vocabulary, also read by the per-row tag select inside
-		// partials/broker-list.html - the fragment endpoints pass this exact
-		// key, so the page render has to provide it too.
+		// The closed disposition vocabulary, read by both the filter
+		// dropdown and the per-row tag select in
+		// partials/broker-list.html. Unlike categories and regions it is
+		// NOT derived from the loaded data: it is mostly unpopulated, so
+		// deriving it would leave the filter empty until something happened
+		// to be tagged - exactly when you most want to check that nothing
+		// is. Not called "Tags": inside {{range .Brokers}} that name means
+		// one broker's own tags.
 		"DispositionTags": broker.DispositionTags,
 		"Regions":         s.getUniqueRegions(),
 		"Priorities":      broker.Priorities,

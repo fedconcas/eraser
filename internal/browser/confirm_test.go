@@ -89,7 +89,7 @@ func TestClickConfirmationLink_AllowsRedirectToAllowedDomain(t *testing.T) {
 	handler := NewConfirmationHandler(domains)
 
 	// httptest servers bind loopback, which the production transport's dial
-	// guard refuses by design (see guardedTransport). Swap in a plain
+	// guard refuses by design (see GuardedTransport). Swap in a plain
 	// transport so this test exercises the redirect/domain logic it's about;
 	// the guard itself is covered by
 	// TestClickConfirmationLink_BlocksNonPublicAddressRegardlessOfFlag.

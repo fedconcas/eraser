@@ -29,7 +29,7 @@ func (s stubAuditChecker) WebsiteAlive(ctx context.Context, url string) (bool, e
 	return s.websiteOK, s.websiteErr
 }
 
-func (s stubAuditChecker) MXExists(domain string) (bool, error) {
+func (s stubAuditChecker) MXExists(ctx context.Context, domain string) (bool, error) {
 	return s.mxOK, s.mxErr
 }
 
@@ -288,5 +288,36 @@ func TestExportBrokerRepliesJSONL(t *testing.T) {
 	}
 	if !usdata["body_missing"].(bool) {
 		t.Error("usdata entry should be marked body_missing")
+	}
+}
+
+// TestMXExistsHonoursContext pins the ctx plumbing: the resolver lookup used
+// to run on its own context.Background() with a hardcoded 15s budget, so
+// --timeout did not bound it and a cancelled audit could not interrupt a
+// lookup already in flight. A cancelled context must come back immediately,
+// and as an error - "inconclusive", never "no MX" (which would read as a
+// dead broker).
+func TestMXExistsHonoursContext(t *testing.T) {
+	chk := newNetAuditChecker(10 * time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan struct{})
+	var ok bool
+	var err error
+	go func() {
+		ok, err = chk.MXExists(ctx, "example.com")
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("MXExists ignored the cancelled context")
+	}
+	if err == nil {
+		t.Fatalf("MXExists on a cancelled context = %v, nil; want an inconclusive error", ok)
+	}
+	if ok {
+		t.Error("a cancelled lookup must never report the domain as live")
 	}
 }

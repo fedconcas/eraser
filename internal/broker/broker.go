@@ -7,7 +7,9 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/eraser-privacy/eraser/internal/fsutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -190,6 +192,44 @@ func (b *Broker) RemoveTag(tag string) bool {
 	return true
 }
 
+// ApplyDisposition is the one place the disposition-tag rules live: validate
+// the tag against the closed vocabulary, add or remove it, and make sure a
+// tagged broker carries an explanation (the shipped-data test requires a
+// tagged broker to have Notes, so a tag applied with nothing to say still
+// gets an audit line). note, when non-empty, replaces Notes outright - it is
+// the evidence the user is recording. via names the door the change came
+// through ("CLI", "web UI") and appears in the auto-filled note.
+//
+// Both the CLI's tag-broker and the web UI's tag endpoint go through here:
+// they used to each carry their own copy of these rules and had already
+// drifted apart on whether the tag was normalized before validation.
+// Reports whether anything changed; an unchanged broker must not be saved,
+// because Save renormalizes the whole file.
+func ApplyDisposition(b *Broker, tag string, remove bool, note, via string) (bool, error) {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if !IsDispositionTag(tag) {
+		return false, fmt.Errorf("invalid tag %q: must be one of %s", tag, strings.Join(DispositionTags, ", "))
+	}
+
+	var changed bool
+	if remove {
+		changed = b.RemoveTag(tag)
+	} else {
+		changed = b.AddTag(tag)
+	}
+	if !changed {
+		return false, nil
+	}
+
+	switch {
+	case strings.TrimSpace(note) != "":
+		b.Notes = note
+	case !remove && strings.TrimSpace(b.Notes) == "":
+		b.Notes = fmt.Sprintf("Tagged %s via %s on %s.", tag, via, time.Now().Format("Jan 2, 2006"))
+	}
+	return true, nil
+}
+
 // Sendable filters list down to the brokers an email may actually go to.
 func Sendable(list []Broker) []Broker {
 	out := make([]Broker, 0, len(list))
@@ -256,10 +296,14 @@ func LoadFromFile(path string) (*BrokerDatabase, error) {
 	return &db, nil
 }
 
-func toSet(items []string) map[string]bool {
+// ToSet lower-cases and trims items into a lookup set. Exported because the
+// web UI matches the same excluded_brokers list Filter does and must
+// normalize entries identically - a hand-written " spokeo" has to mean the
+// same thing on both sides.
+func ToSet(items []string) map[string]bool {
 	m := make(map[string]bool, len(items))
 	for _, s := range items {
-		m[strings.ToLower(s)] = true
+		m[strings.ToLower(strings.TrimSpace(s))] = true
 	}
 	return m
 }
@@ -269,7 +313,7 @@ func toSet(items []string) map[string]bool {
 // (case-insensitive) is in excludedCategories - e.g. "requires-id" to skip
 // brokers that demand a government ID document before acting on a request.
 func (db *BrokerDatabase) Filter(regions []string, excluded []string, excludedCategories []string) []Broker {
-	regionSet, excludedSet, excludedCatSet := toSet(regions), toSet(excluded), toSet(excludedCategories)
+	regionSet, excludedSet, excludedCatSet := ToSet(regions), ToSet(excluded), ToSet(excludedCategories)
 
 	var result []Broker
 	for _, b := range db.Brokers {
@@ -303,7 +347,7 @@ func SelectCategories(list []Broker, cats []string) []Broker {
 	if len(cats) == 0 {
 		return list
 	}
-	want := toSet(cats)
+	want := ToSet(cats)
 	var out []Broker
 	for _, b := range list {
 		if want[strings.ToLower(b.Category)] {
@@ -320,7 +364,7 @@ func SelectIDs(list []Broker, ids []string) []Broker {
 	if len(ids) == 0 {
 		return list
 	}
-	want := toSet(ids)
+	want := ToSet(ids)
 	var out []Broker
 	for _, b := range list {
 		if want[strings.ToLower(b.ID)] || want[strings.ToLower(b.Name)] {
@@ -355,7 +399,7 @@ func FilterByPriority(brokers []Broker, priorities []string) []Broker {
 	if len(priorities) == 0 {
 		return brokers
 	}
-	want := toSet(priorities)
+	want := ToSet(priorities)
 
 	result := make([]Broker, 0, len(brokers))
 	for _, b := range brokers {
@@ -387,12 +431,18 @@ func (db *BrokerDatabase) FindByID(id string) *Broker {
 	return nil
 }
 
+// Save writes the database to path. The write is atomic (temp file in the
+// same directory, then rename) because the web UI now rewrites this file on
+// ordinary row actions: a plain os.WriteFile truncates first, so a process
+// killed mid-write would leave a partial brokers.yaml that either fails to
+// parse or - worse - still parses, silently short of every broker after the
+// cut.
 func (db *BrokerDatabase) Save(path string) error {
 	data, err := yaml.Marshal(db)
 	if err != nil {
 		return fmt.Errorf("failed to serialize brokers: %w", err)
 	}
-	return os.WriteFile(path, data, 0644)
+	return fsutil.WriteFileAtomic(path, data, 0644)
 }
 
 func (db *BrokerDatabase) Add(broker Broker) error {

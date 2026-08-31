@@ -122,7 +122,7 @@
                             hx-trigger="change"
                             hx-target="#broker-list"
                             hx-swap="innerHTML"
-                            hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
+                            hx-include="#broker-filters"
                         >
                             <option value="">Tag&hellip;</option>
                             {{range $.DispositionTags}}
@@ -140,7 +140,7 @@
                             hx-post="/api/brokers/{{.ID}}/exclude"
                             hx-target="#broker-list"
                             hx-swap="innerHTML"
-                            hx-include="#exclude-action-{{.ID}},#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
+                            hx-include="#exclude-action-{{.ID}},#broker-filters"
                             title="Put this broker back in your send list"
                         >
                             Include
@@ -152,7 +152,7 @@
                             hx-post="/api/brokers/{{.ID}}/exclude"
                             hx-target="#broker-list"
                             hx-swap="innerHTML"
-                            hx-include="#exclude-action-{{.ID}},#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
+                            hx-include="#exclude-action-{{.ID}},#broker-filters"
                             title="Hide this broker and never send to it (undo via Include in the non-sendable view)"
                         >
                             Exclude
@@ -289,7 +289,7 @@
                 hx-trigger="change"
                 hx-target="#broker-list"
                 hx-swap="innerHTML"
-                hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
+                hx-include="#broker-filters"
             >
                 <option value="">Tag&hellip;</option>
                 {{range $.DispositionTags}}
@@ -307,7 +307,7 @@
                 hx-post="/api/brokers/{{.ID}}/exclude"
                 hx-target="#broker-list"
                 hx-swap="innerHTML"
-                hx-include="#exclude-action-mobile-{{.ID}},#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
+                hx-include="#exclude-action-mobile-{{.ID}},#broker-filters"
             >
                 Include
             </button>
@@ -318,7 +318,7 @@
                 hx-post="/api/brokers/{{.ID}}/exclude"
                 hx-target="#broker-list"
                 hx-swap="innerHTML"
-                hx-include="#exclude-action-mobile-{{.ID}},#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag'],[name='non_sendable']"
+                hx-include="#exclude-action-mobile-{{.ID}},#broker-filters"
             >
                 Exclude
             </button>

@@ -461,3 +461,113 @@ func TestDispositionTagsAreKnown(t *testing.T) {
 		}
 	}
 }
+
+// TestApplyDisposition covers the rules both doors (CLI tag-broker and the
+// web tag endpoint) now share: closed vocabulary, no-op detection, and the
+// audit note a tagged broker must carry.
+func TestApplyDisposition(t *testing.T) {
+	t.Run("unknown tag is rejected", func(t *testing.T) {
+		b := Broker{ID: "acme"}
+		if _, err := ApplyDisposition(&b, "b2b_only", false, "", "CLI"); err == nil {
+			t.Fatal("expected an error for a tag outside the vocabulary")
+		}
+		if len(b.Tags) != 0 {
+			t.Errorf("rejected tag was applied anyway: %v", b.Tags)
+		}
+	})
+
+	t.Run("tag fills in an audit note", func(t *testing.T) {
+		b := Broker{ID: "acme"}
+		changed, err := ApplyDisposition(&b, "  B2B-Only  ", false, "", "web UI")
+		if err != nil || !changed {
+			t.Fatalf("ApplyDisposition = %v, %v; want true, nil", changed, err)
+		}
+		if !b.HasTag(TagB2BOnly) {
+			t.Errorf("tag not applied: %v", b.Tags)
+		}
+		if !strings.Contains(b.Notes, "web UI") {
+			t.Errorf("Notes = %q, want the auto-filled audit line naming the door", b.Notes)
+		}
+	})
+
+	t.Run("explicit note wins", func(t *testing.T) {
+		b := Broker{ID: "acme", Notes: "old"}
+		if _, err := ApplyDisposition(&b, TagUSDataOnly, false, "their reply, 2026-08-30", "CLI"); err != nil {
+			t.Fatalf("ApplyDisposition: %v", err)
+		}
+		if b.Notes != "their reply, 2026-08-30" {
+			t.Errorf("Notes = %q, want the supplied evidence", b.Notes)
+		}
+	})
+
+	t.Run("re-adding is a no-op", func(t *testing.T) {
+		b := Broker{ID: "acme", Tags: []string{TagB2BOnly}, Notes: "kept"}
+		changed, err := ApplyDisposition(&b, TagB2BOnly, false, "", "CLI")
+		if err != nil {
+			t.Fatalf("ApplyDisposition: %v", err)
+		}
+		if changed {
+			t.Error("re-adding an existing tag reported a change - that would rewrite brokers.yaml for nothing")
+		}
+		if b.Notes != "kept" {
+			t.Errorf("Notes = %q, want the existing note untouched", b.Notes)
+		}
+	})
+
+	t.Run("remove makes it sendable again without a note", func(t *testing.T) {
+		b := Broker{ID: "acme", Email: "privacy@acme.example", Tags: []string{TagB2BOnly}}
+		changed, err := ApplyDisposition(&b, TagB2BOnly, true, "", "CLI")
+		if err != nil || !changed {
+			t.Fatalf("ApplyDisposition = %v, %v; want true, nil", changed, err)
+		}
+		if b.HasTag(TagB2BOnly) {
+			t.Errorf("tag still present: %v", b.Tags)
+		}
+		if b.Notes != "" {
+			t.Errorf("Notes = %q, want removal to invent nothing", b.Notes)
+		}
+		if !b.Sendable() {
+			t.Error("broker still unsendable after the tag was removed")
+		}
+	})
+}
+
+// TestSaveIsAtomic pins that a Save never leaves a truncated file behind:
+// the write lands via a rename, so the file only ever holds one complete
+// version and the temp file is not left in the directory.
+func TestSaveIsAtomic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "brokers.yaml")
+	db := &BrokerDatabase{Brokers: []Broker{{ID: "acme", Name: "Acme", Email: "privacy@acme.example"}}}
+	if err := db.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := db.Save(path); err != nil {
+		t.Fatalf("second Save: %v", err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range entries {
+		if e.Name() != "brokers.yaml" {
+			t.Errorf("Save left %s behind in the data directory", e.Name())
+		}
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0644 {
+		t.Errorf("brokers.yaml mode = %o, want 644", perm)
+	}
+	reloaded, err := LoadFromFile(path)
+	if err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+	if len(reloaded.Brokers) != 1 {
+		t.Errorf("reloaded %d brokers, want 1", len(reloaded.Brokers))
+	}
+}
