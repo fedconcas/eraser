@@ -8,6 +8,13 @@
      the page's "Include non-sendable" checkbox is ticked, which is also
      where the Include button lives to undo an exclusion. -->
 <!-- Count header -->
+{{if .OutOfBand}}
+<!-- Fragment renders only: refresh the page header's "Emailable in this view"
+     counter out-of-band, since it lives outside this partial and a tag or
+     exclude action can change it. Full-page renders must not emit this -
+     it would show as a stray number in the list - hence the guard. -->
+<span id="sendable-count" hx-swap-oob="innerHTML">{{.SendableCount}}</span>
+{{end}}
 <div class="px-4 py-3 border-b border-[var(--border)] bg-elevated flex flex-wrap items-center justify-between gap-2">
     <p class="text-sm text-secondary">Showing <span class="font-medium text-primary">{{.Filtered}}</span> of <span class="font-medium text-primary">{{.Total}}</span> brokers</p>
     <p class="text-sm text-muted"><span class="font-medium text-primary" data-selection-count>0</span> selected</p>

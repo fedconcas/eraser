@@ -41,6 +41,11 @@ func (s *Server) renderBrokerListFragment(w http.ResponseWriter, r *http.Request
 		"Filtered":        len(brokers),
 		"Total":           len(s.getBrokerDB().Brokers),
 		"DispositionTags": broker.DispositionTags,
+		// Tag/exclude actions change how many rows are emailable, and the
+		// counter lives in the page header, outside this fragment - the
+		// partial's OutOfBand span swaps the new number in.
+		"SendableCount": len(sendable(brokers)),
+		"OutOfBand":     true,
 	})
 }
 

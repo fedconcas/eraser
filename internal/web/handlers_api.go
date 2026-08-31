@@ -37,6 +37,8 @@ func (s *Server) handleAPIBrokers(w http.ResponseWriter, r *http.Request) {
 		"Filtered":        len(brokers),
 		"Total":           len(s.getBrokerDB().Brokers),
 		"DispositionTags": broker.DispositionTags,
+		"SendableCount":   len(sendable(brokers)),
+		"OutOfBand":       true,
 	})
 }
 

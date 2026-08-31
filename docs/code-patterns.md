@@ -58,6 +58,8 @@ Excluded brokers are hidden from the brokers page's default (sendable) view but 
 
 Adding another filter to the brokers page means touching **three** places, and missing any one of them makes the filter silently reset rather than fail: the `hx-include` list on *every other* control in `brokers.html` (each one names its siblings, so a new control has to be added to all of them), the new control's own `hx-include`, and `currentFilters()` in the same file - the latter is what the two full-table refreshes replay after a send job finishes.
 
+The "Emailable in this view" counter lives in the page header, *outside* the `#broker-list` fragment - but tag, exclude and filter actions all change it. Every fragment render of `partials/broker-list.html` therefore passes `SendableCount` plus `OutOfBand: true`, and the partial emits a top-level `<span id="sendable-count" hx-swap-oob>` that htmx swaps into the header. The guard matters: a full-page render must not emit the span (it would show as a stray number in the list). If you add another fragment render of that partial, pass both values or the counter goes stale.
+
 A disposition tag is an assertion about the *company*, not about one user's results. "They told us they are B2B-only" belongs in `brokers.yaml`; "they had no record of me" is per-user and belongs in `history.db`. `internal/inbox/classifier.go` keeps these apart: `ResponseB2BOnly` is scored separately from `ResponseRejected` precisely because "no record of you" is the normal output of a working erasure campaign and must never tag a live broker as dead.
 
 ## Broker IDs are join keys into history.db
