@@ -297,10 +297,15 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 			ResponseType: string(classified.Type),
 			EmailFrom:    email.From,
 			EmailSubject: email.Subject,
-			EmailBody:    bodyContent,
-			FormURL:      classified.FormURL,
-			ConfirmURL:   classified.ConfirmURL,
-			Confidence:   classified.Confidence,
+			// Dedupes this reply against the copies earlier scans of the
+			// same trailing window already recorded - including the copy
+			// this scan may itself have just fetched out of the archive
+			// folder, whose IMAP UID differs but whose Message-ID does not.
+			EmailMessageID: email.MessageID,
+			EmailBody:      bodyContent,
+			FormURL:        classified.FormURL,
+			ConfirmURL:     classified.ConfirmURL,
+			Confidence:     classified.Confidence,
 			// A reply we recognised but couldn't pin to a broker always wants
 			// a human look, whatever the classifier made of its wording.
 			NeedsReview: classified.NeedsReview || inbox.IsUnattributed(email.BrokerID),
@@ -518,12 +523,16 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 					ResponseType: string(classified.Type),
 					EmailFrom:    email.From,
 					EmailSubject: email.Subject,
-					EmailBody:    bodyContent,
-					FormURL:      classified.FormURL,
-					ConfirmURL:   classified.ConfirmURL,
-					Confidence:   classified.Confidence,
-					NeedsReview:  classified.NeedsReview,
-					ReceivedAt:   email.ReceivedAt,
+					// Same dedupe key as the inbox scan, so a reply this
+					// rescan is the first to see does not come back as a
+					// duplicate on the next scan.
+					EmailMessageID: email.MessageID,
+					EmailBody:      bodyContent,
+					FormURL:        classified.FormURL,
+					ConfirmURL:     classified.ConfirmURL,
+					Confidence:     classified.Confidence,
+					NeedsReview:    classified.NeedsReview,
+					ReceivedAt:     email.ReceivedAt,
 				}
 				if err := s.historyStore.AddBrokerResponse(brokerResp); err == nil {
 					inserted++

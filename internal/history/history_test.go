@@ -738,3 +738,242 @@ func TestContactedBrokerIDsEmptyOnFreshStore(t *testing.T) {
 		t.Errorf("expected an empty set on a fresh store, got %+v", contacted)
 	}
 }
+
+// ==================== Broker Response Deduplication Tests ====================
+
+func testBrokerResponse(messageID, subject string, receivedAt time.Time) *BrokerResponse {
+	return &BrokerResponse{
+		BrokerID:       "broker-a",
+		BrokerName:     "Broker A",
+		ResponseType:   "pending",
+		EmailFrom:      "privacy@broker-a.example.com",
+		EmailSubject:   subject,
+		EmailMessageID: messageID,
+		Confidence:     0.9,
+		ReceivedAt:     receivedAt,
+	}
+}
+
+func countBrokerResponses(t *testing.T, s *Store) int {
+	t.Helper()
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM broker_responses`).Scan(&n); err != nil {
+		t.Fatalf("count broker_responses: %v", err)
+	}
+	return n
+}
+
+// Every `eraser monitor` run and every web inbox scan re-fetches the same
+// trailing window of mail, so before message_key existed each scan inserted
+// a fresh copy of every reply it had already classified - a real database
+// held 401 rows for 88 distinct replies. Re-recording the same message must
+// be a no-op on the row count.
+func TestAddBrokerResponse_RescanDoesNotDuplicate(t *testing.T) {
+	s := newTestStore(t)
+	received := time.Date(2026, 8, 30, 12, 53, 20, 0, time.UTC)
+
+	first := testBrokerResponse("<abc@broker-a.example.com>", "[Request received]", received)
+	if err := s.AddBrokerResponse(first); err != nil {
+		t.Fatalf("AddBrokerResponse: %v", err)
+	}
+
+	// Three more scans of the same window, as the two entry points would do.
+	for i := 0; i < 3; i++ {
+		again := testBrokerResponse("<abc@broker-a.example.com>", "[Request received]", received)
+		if err := s.AddBrokerResponse(again); err != nil {
+			t.Fatalf("AddBrokerResponse (rescan %d): %v", i, err)
+		}
+		if again.ID != first.ID {
+			t.Errorf("rescan %d: expected the existing row's ID %d, got %d", i, first.ID, again.ID)
+		}
+	}
+
+	if n := countBrokerResponses(t, s); n != 1 {
+		t.Fatalf("expected 1 stored response after 4 scans of the same message, got %d", n)
+	}
+}
+
+// A different message from the same broker is still a separate response,
+// even when brokers reuse one boilerplate subject for every acknowledgement.
+func TestAddBrokerResponse_DistinctMessagesAreSeparateRows(t *testing.T) {
+	s := newTestStore(t)
+	received := time.Date(2026, 8, 30, 12, 53, 20, 0, time.UTC)
+
+	for _, id := range []string{"<one@broker-a.example.com>", "<two@broker-a.example.com>"} {
+		if err := s.AddBrokerResponse(testBrokerResponse(id, "[Request received]", received)); err != nil {
+			t.Fatalf("AddBrokerResponse: %v", err)
+		}
+	}
+	// No Message-ID at all: these fall back to the derived identity, where
+	// the arrival timestamp is what separates them.
+	if err := s.AddBrokerResponse(testBrokerResponse("", "[Request received]", received)); err != nil {
+		t.Fatalf("AddBrokerResponse: %v", err)
+	}
+	if err := s.AddBrokerResponse(testBrokerResponse("", "[Request received]", received.Add(time.Minute))); err != nil {
+		t.Fatalf("AddBrokerResponse: %v", err)
+	}
+	// ...and re-seeing that last one is still not a new row.
+	if err := s.AddBrokerResponse(testBrokerResponse("", "[Request received]", received.Add(time.Minute))); err != nil {
+		t.Fatalf("AddBrokerResponse: %v", err)
+	}
+
+	if n := countBrokerResponses(t, s); n != 4 {
+		t.Fatalf("expected 4 distinct responses, got %d", n)
+	}
+}
+
+// `eraser monitor` never stores an email body; the web scan does. Re-seeing
+// a message must fill in a body the stored row is missing rather than
+// leaving the reply permanently unreadable in the UI - but must not clobber
+// a body that is already there.
+func TestAddBrokerResponse_RescanBackfillsMissingBody(t *testing.T) {
+	s := newTestStore(t)
+	received := time.Date(2026, 8, 30, 12, 53, 20, 0, time.UTC)
+
+	bodyless := testBrokerResponse("<abc@broker-a.example.com>", "Re: erasure request", received)
+	if err := s.AddBrokerResponse(bodyless); err != nil {
+		t.Fatalf("AddBrokerResponse: %v", err)
+	}
+
+	withBody := testBrokerResponse("<abc@broker-a.example.com>", "Re: erasure request", received)
+	withBody.EmailBody = "We have received your request."
+	if err := s.AddBrokerResponse(withBody); err != nil {
+		t.Fatalf("AddBrokerResponse (with body): %v", err)
+	}
+
+	later := testBrokerResponse("<abc@broker-a.example.com>", "Re: erasure request", received)
+	later.EmailBody = ""
+	if err := s.AddBrokerResponse(later); err != nil {
+		t.Fatalf("AddBrokerResponse (body-less rescan): %v", err)
+	}
+
+	all, err := s.GetAllBrokerResponses()
+	if err != nil {
+		t.Fatalf("GetAllBrokerResponses: %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 stored response, got %d", len(all))
+	}
+	if all[0].EmailBody != "We have received your request." {
+		t.Fatalf("expected the backfilled body to be kept, got %q", all[0].EmailBody)
+	}
+}
+
+// The migration has to fix databases that already grew duplicates, and stay
+// a no-op when re-run. Rows written before the column existed carry no
+// Message-ID, so they are keyed on the derived (broker, subject,
+// received_at) identity - including a received_at in the Go
+// time.Time.String() layout the driver actually writes.
+func TestMigrateBrokerResponses_DedupesAndBackfillsLegacyRows(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "history.db")
+	s, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	// Simulate a pre-migration database: drop the uniqueness guard and the
+	// key column's contents, then write the duplicates the old scan loop
+	// would have.
+	if _, err := s.db.Exec(`DROP INDEX idx_br_message_key`); err != nil {
+		t.Fatalf("drop index: %v", err)
+	}
+	insert := `INSERT INTO broker_responses (profile_id, broker_id, broker_name, response_type,
+		email_from, email_subject, email_body, confidence, needs_review, received_at, processed_at, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
+	now := time.Now()
+	for i := 0; i < 4; i++ {
+		body := ""
+		if i == 1 { // only one scan of the four stored a body
+			body = "We have received your request."
+		}
+		if _, err := s.db.Exec(insert, DefaultProfileID, "broker-a", "Broker A", "pending",
+			"privacy@broker-a.example.com", "[Request received]", body, 0.9,
+			"2026-08-30 12:53:20 +0000 +0000", now, now); err != nil {
+			t.Fatalf("legacy insert: %v", err)
+		}
+	}
+	// A genuinely different reply, duplicated the same way.
+	for i := 0; i < 2; i++ {
+		if _, err := s.db.Exec(insert, DefaultProfileID, "broker-b", "Broker B", "success",
+			"privacy@broker-b.example.com", "Deletion complete", "", 0.95,
+			"2026-08-29 09:00:00 +0000 +0000", now, now); err != nil {
+			t.Fatalf("legacy insert: %v", err)
+		}
+	}
+	if n := countBrokerResponses(t, s); n != 6 {
+		t.Fatalf("expected 6 legacy rows, got %d", n)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Reopening runs migrate().
+	s2, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewStore (migrating): %v", err)
+	}
+	t.Cleanup(func() { _ = s2.Close() })
+
+	if n := countBrokerResponses(t, s2); n != 2 {
+		t.Fatalf("expected the 6 legacy rows to collapse to 2 distinct replies, got %d", n)
+	}
+	all, err := s2.GetAllBrokerResponses()
+	if err != nil {
+		t.Fatalf("GetAllBrokerResponses: %v", err)
+	}
+	for _, r := range all {
+		if r.BrokerID == "broker-a" && r.EmailBody != "We have received your request." {
+			t.Errorf("expected the surviving broker-a row to be the one with a body, got %q", r.EmailBody)
+		}
+	}
+
+	// The first scan after migrating sees the same messages, now with the
+	// Message-IDs that were never stored before. Those must re-key the
+	// existing rows rather than insert a duplicate alongside each of them.
+	rekeyed := testBrokerResponse("<abc@broker-a.example.com>", "[Request received]",
+		time.Date(2026, 8, 30, 12, 53, 20, 0, time.UTC))
+	if err := s2.AddBrokerResponse(rekeyed); err != nil {
+		t.Fatalf("AddBrokerResponse (post-migration scan): %v", err)
+	}
+	// And the scan after that, matching on the Message-ID directly.
+	if err := s2.AddBrokerResponse(testBrokerResponse("<abc@broker-a.example.com>", "[Request received]",
+		time.Date(2026, 8, 30, 12, 53, 20, 0, time.UTC))); err != nil {
+		t.Fatalf("AddBrokerResponse (second post-migration scan): %v", err)
+	}
+	if n := countBrokerResponses(t, s2); n != 2 {
+		t.Fatalf("expected 2 responses after two post-migration scans, got %d", n)
+	}
+
+	// Re-running the migration on an already-migrated database changes
+	// nothing.
+	if err := s2.migrate(); err != nil {
+		t.Fatalf("migrate (idempotency): %v", err)
+	}
+	if n := countBrokerResponses(t, s2); n != 2 {
+		t.Fatalf("expected re-running migrate() to be a no-op, got %d rows", n)
+	}
+}
+
+func TestParseStoredTime(t *testing.T) {
+	want := time.Date(2026, 8, 30, 12, 53, 20, 0, time.UTC)
+	for _, raw := range []string{
+		"2026-08-30T12:53:20Z",
+		"2026-08-30 12:53:20",
+		"2026-08-30 12:53:20 +0000 +0000",
+		"2026-08-30 12:53:20 +0000 UTC",
+		"2026-08-30 05:53:20 -0700 -0700",
+		"2026-08-30 12:53:20 +0000 UTC m=+562.394283501",
+	} {
+		got, ok := parseStoredTime(raw)
+		if !ok {
+			t.Errorf("parseStoredTime(%q): no layout matched", raw)
+			continue
+		}
+		if !got.Equal(want) {
+			t.Errorf("parseStoredTime(%q) = %v, want %v", raw, got.UTC(), want)
+		}
+	}
+	if _, ok := parseStoredTime("not a timestamp"); ok {
+		t.Error("expected an unparseable value to be reported as such")
+	}
+}

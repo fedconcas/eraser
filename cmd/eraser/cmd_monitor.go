@@ -207,9 +207,12 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 			ResponseType: string(classified.Type),
 			EmailFrom:    email.From,
 			EmailSubject: email.Subject,
-			FormURL:      classified.FormURL,
-			ConfirmURL:   classified.ConfirmURL,
-			Confidence:   classified.Confidence,
+			// Dedupes this reply against the copies earlier scans of the
+			// same trailing window already recorded.
+			EmailMessageID: email.MessageID,
+			FormURL:        classified.FormURL,
+			ConfirmURL:     classified.ConfirmURL,
+			Confidence:     classified.Confidence,
 			// A reply we recognised but couldn't pin to a broker always wants
 			// a human look, whatever the classifier made of its wording.
 			NeedsReview: classified.NeedsReview || inbox.IsUnattributed(email.BrokerID),
@@ -334,11 +337,14 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 				ResponseType: string(classified.Type),
 				EmailFrom:    email.From,
 				EmailSubject: email.Subject,
-				FormURL:      classified.FormURL,
-				ConfirmURL:   classified.ConfirmURL,
-				Confidence:   classified.Confidence,
-				NeedsReview:  classified.NeedsReview,
-				ReceivedAt:   email.ReceivedAt,
+				// Same dedupe key as the scan loop above: --watch and a
+				// subsequent scan of the same window see the same message.
+				EmailMessageID: email.MessageID,
+				FormURL:        classified.FormURL,
+				ConfirmURL:     classified.ConfirmURL,
+				Confidence:     classified.Confidence,
+				NeedsReview:    classified.NeedsReview,
+				ReceivedAt:     email.ReceivedAt,
 			}
 			if err := store.AddBrokerResponse(brokerResp); err != nil {
 				fmt.Printf("⚠️  Failed to store response: %v\n", err)
