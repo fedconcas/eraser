@@ -51,11 +51,16 @@
                     {{end}}
                 </td>
                 <td>
-                    {{if .Category}}
-                    <span class="badge badge-neutral">{{.Category}}</span>
-                    {{else}}
-                    <span class="text-muted">&mdash;</span>
-                    {{end}}
+                    <div class="flex flex-wrap items-center gap-1">
+                        {{if .Category}}
+                        <span class="badge badge-neutral">{{.Category}}</span>
+                        {{else}}
+                        <span class="text-muted">&mdash;</span>
+                        {{end}}
+                        {{range .Tags}}
+                        <span class="badge badge-warning" title="What this company told us about itself">{{.}}</span>
+                        {{end}}
+                    </div>
                 </td>
                 <td>
                     {{if .Priority}}
@@ -176,6 +181,9 @@
         <div class="flex items-center gap-2 mb-3 text-sm">
             {{if .Category}}
             <span class="badge badge-neutral">{{.Category}}</span>
+            {{end}}
+            {{range .Tags}}
+            <span class="badge badge-warning">{{.}}</span>
             {{end}}
             {{if .Priority}}
             <span class="badge {{if eq .Priority "high"}}badge-warning{{else if eq .Priority "medium"}}badge-info{{else}}badge-neutral{{end}}">{{.Priority}}</span>

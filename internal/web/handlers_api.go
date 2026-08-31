@@ -26,6 +26,7 @@ func (s *Server) handleAPIBrokers(w http.ResponseWriter, r *http.Request) {
 		Priority:     r.URL.Query().Get("priority"),
 		Status:       r.URL.Query().Get("status"),
 		MissingEmail: r.URL.Query().Get("missing_email") == "true",
+		Tag:          r.URL.Query().Get("tag"),
 	})
 
 	// Returns broker list as HTML fragment for HTMX

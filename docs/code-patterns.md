@@ -48,6 +48,10 @@ Paths 2 and 4 resolve a broker by ID and so never pass through `getBrokersWithSt
 
 The bulk-send endpoint also accepts explicit `broker_ids`. Those are **intersected with the already-filtered, already-gated candidate list** - never resolved against `s.brokerDB` directly, which would be a way around the exclusions, the filters and the gate at once. `TestSendAllSelectionCannotBypassGates` pins this.
 
+**The tag filter's dropdown is fed by `broker.DispositionTags`, not by the data.** `getUniqueCategories`/`getUniqueRegions` derive their options by walking the loaded brokers, which is right for open vocabularies. Dispositions are a closed set that is mostly *unpopulated*, so deriving them would leave the selector empty until something happened to be tagged - i.e. it would disappear exactly when you want to check that nothing carries a tag. `getDispositionTags` returns the constant instead. The CLI mirrors this: an unrecognised `list-brokers --tag` is an error, not an empty list, so a typo doesn't read as "no such brokers".
+
+Adding another filter to the brokers page means touching **three** places, and missing any one of them makes the filter silently reset rather than fail: the `hx-include` list on *every other* control in `brokers.html` (each one names its siblings, so a new control has to be added to all of them), the new control's own `hx-include`, and `currentFilters()` in the same file - the latter is what the two full-table refreshes replay after a send job finishes.
+
 A disposition tag is an assertion about the *company*, not about one user's results. "They told us they are B2B-only" belongs in `brokers.yaml`; "they had no record of me" is per-user and belongs in `history.db`. `internal/inbox/classifier.go` keeps these apart: `ResponseB2BOnly` is scored separately from `ResponseRejected` precisely because "no record of you" is the normal output of a working erasure campaign and must never tag a live broker as dead.
 
 ## Broker IDs are join keys into history.db

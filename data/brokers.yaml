@@ -20,6 +20,7 @@ brokers:
       email: ""
       website: https://www.whitepages.com
       opt_out_url: https://www.whitepages.com/suppression-requests
+      description: People-search site publishing names, addresses and phone numbers from public records and commercial sources
       region: us
       category: people-search
       priority: high
@@ -37,6 +38,7 @@ brokers:
       email: ""
       website: https://www.truepeoplesearch.com
       opt_out_url: https://www.truepeoplesearch.com/removal
+      description: Free people-search engine aggregating names, phone numbers, addresses and property data from public records
       region: us
       category: people-search
       priority: high
@@ -111,6 +113,7 @@ brokers:
       email: ""
       notes: Email privacy@publicrecordsnow.com hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.publicrecordsnow.com
+      description: People search and public records database aggregating 120+ billion records from 6000+ data sources
       region: us
       category: people-search
       priority: high
@@ -120,6 +123,7 @@ brokers:
       notes: Email privacy@addresses.com hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.addresses.com
       opt_out_url: https://www.addresses.com/optout.php
+      description: Address search and public records lookup service for contact information
       region: us
       category: people-search
       priority: high
@@ -144,6 +148,7 @@ brokers:
       email: ""
       website: https://www.searchpeoplefree.com
       opt_out_url: https://www.searchpeoplefree.com/opt-out
+      description: People search site aggregating public records and contact info for 700+ million searchable profiles
       region: us
       category: people-search
       priority: high
@@ -185,6 +190,7 @@ brokers:
       name: TransUnion Marketing
       email: privacy@transunion.com
       website: https://www.transunion.com
+      description: Credit bureau and marketing solutions data broker with consumer behavioral and demographic data
       region: global
       category: marketing
       priority: high
@@ -209,6 +215,7 @@ brokers:
       email: ""
       website: https://www.nielsen.com
       opt_out_url: https://privacyportal-de.onetrust.com/webform/70b0083d-d519-4ad2-84ca-96b7c5f8e1a9/9810a8bc-e54d-4d70-bac0-5e4d781ef5b9
+      description: Global measurement and analytics company collecting consumer behavioral and demographic data
       region: global
       category: marketing
       priority: high
@@ -226,6 +233,7 @@ brokers:
       email: privacy@tapad.com
       website: https://www.tapad.com
       opt_out_url: https://www.tapad.com/privacy-policy
+      description: Cross-device targeting platform providing audience data and ID resolution for ad targeting
       region: global
       category: marketing
       priority: high
@@ -234,6 +242,7 @@ brokers:
       email: ""
       website: https://www.lotame.com
       opt_out_url: https://legal.epsilon.com/dsr
+      description: Data management platform and marketplace providing audience segments and consumer data
       region: global
       category: marketing
       priority: medium
@@ -242,6 +251,7 @@ brokers:
       name: Checkr
       email: hello@checkr.com
       website: https://checkr.com
+      description: Background screening and post-hire workforce monitoring service for employers
       region: us
       category: background-check
       priority: medium
@@ -250,6 +260,7 @@ brokers:
       name: GoodHire
       email: privacy@goodhire.com
       website: https://www.goodhire.com
+      description: FCRA-compliant background check service providing employment screening for employers
       region: us
       category: background-check
       priority: medium
@@ -264,6 +275,7 @@ brokers:
       name: HireRight
       email: dpo@hireright.com
       website: https://www.hireright.com
+      description: Global employment background check service offering criminal, MVR and verification checks
       region: global
       category: background-check
       priority: high
@@ -327,6 +339,7 @@ brokers:
       email: ""
       notes: Email privacy@veromi.net hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.veromi.net
+      description: People search and public records service with background check and contact information tools
       region: us
       category: people-search
       priority: high
@@ -335,6 +348,7 @@ brokers:
       email: privacy@01advertising.com
       website: https://www.01advertising.com/
       opt_out_url: https://app.termly.io/notify/d1321341-0e82-4d8c-afaf-c4940d46c171
+      description: Ad-tech platform for audience activation and data integration in programmatic advertising
       region: us
       category: marketing
       priority: low
@@ -351,6 +365,7 @@ brokers:
       email: privacy@33across.com
       website: https://www.33across.com/
       opt_out_url: https://www.33across.com/wp-content/uploads/2020/04/33Across-CCPA-Notice-Collection-Policy_US.pdf
+      description: Demand-side platform (DSP) providing intent signals and audience data from publisher network
       region: us
       category: marketing
       priority: medium
@@ -359,15 +374,18 @@ brokers:
       email: ccpa@mediaocean.com
       website: https://www.mediaocean.com/
       opt_out_url: https://www.mediaocean.com/your-privacy-rights
+      description: Marketing analytics and ad-tech platform for multi-channel marketing measurement and targeting
       region: us
       category: marketing
       priority: medium
+      notes: Acquired by MediaOcean in 2020; now part of Mediaocean portfolio
     - id: 4eyesai
       name: 4Eyes.Ai, Inc.
       email: ""
       notes: Email privacy@4-eyes.ai hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.4-eyes.ai/
       opt_out_url: https://www.4-eyes.ai/privacy-policy?cord_section=privacy_options_dns
+      description: AI-powered contextual targeting and audience segmentation platform for digital advertising
       region: us
       category: marketing
       priority: low
@@ -414,6 +432,7 @@ brokers:
       email: support@accurateappend.com
       website: https://www.accurateappend.com/
       opt_out_url: https://clients.accurateappend.com/Public/OptOut
+      description: Data append service adding phone, email, address and demographic data to customer lists
       region: us
       category: marketing
       priority: low
@@ -459,6 +478,7 @@ brokers:
       notes: 'AdAdapted''s opt-out policy: "does not store or receive email address, only the mobile advertising identifier - requests cannot be processed without one."'
       website: https://www.adadapted.com/
       opt_out_url: https://www.adadapted.com/legal/do-not-sell
+      description: Mobile advertising platform collecting mobile advertising IDs for device-based targeting
       region: us
       category: device-id-only
       priority: low
@@ -475,15 +495,17 @@ brokers:
       email: ""
       website: https://www.adept-id.com/
       opt_out_url: https://www.adept-id.com/opt-out-preferences/
+      description: Ad-tech marketing platform providing identity and targeting solutions for advertisers
       region: us
       notes: 'Reply 2026-08-20 said email requests require a data rights form via their Osano-hosted portal (per-request prefill link, not reusable). Use the opt_out_url instead; email skipped.'
       category: marketing
       priority: low
     - id: adrea-rubin-marketing
       name: Adrea Rubin Marketing, Inc.
-      email: ""
+      email: privacy@adrearubin.com
       notes: Email jenniferv@adrearubin.com hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.adrearubin.com/
+      description: Marketing data and lead generation services
       region: us
       category: marketing
       priority: low
@@ -514,6 +536,7 @@ brokers:
       email: ""
       website: https://www.finsum.com/
       opt_out_url: https://app.smartsheet.com/b/form/48a44f05a4644a1f824601e77ad1719d
+      description: B2B financial advisor intelligence and targeting data
       region: us
       category: marketing
       priority: low
@@ -531,6 +554,7 @@ brokers:
       email: ""
       website: https://www.affinity.solutions/
       opt_out_url: https://affinitysolutions-privacy.my.onetrust.com/webform/a564cfa1-53bf-4c10-bf95-cd907432d7e8/7e4e6bf3-6562-454e-8c73-6a7bd1f4b336
+      description: Consumer purchase insights from credit and debit card data
       region: us
       category: marketing
       priority: medium
@@ -547,6 +571,7 @@ brokers:
       email: privacy@aidentified.com
       website: https://www.aidentified.com/
       opt_out_url: https://www.aidentified.com/delete-my-data
+      description: Relationship intelligence with wealth event and executive data
       region: us
       category: marketing
       priority: medium
@@ -563,6 +588,7 @@ brokers:
       email: privacy.officer@belardiwong.com
       website: https://www.belardiwong.com/
       opt_out_url: https://privacyportal.onetrust.com/webform/3d2d5e0c-bd98-46b8-906c-ede68a6f6a80/dd119353-8970-4dbf-ac1d-b6406173c7bb
+      description: Marketing data and lead generation services
       region: us
       category: marketing
       priority: medium
@@ -580,6 +606,7 @@ brokers:
       name: All Global Resources, LLC
       email: privacy@agrgroupinc.com
       website: 'https://www.agrgroupinc.com/'
+      description: Lead generation for home services and disaster mitigation contractors
       region: us
       category: marketing
       priority: low
@@ -646,6 +673,7 @@ brokers:
       email: ""
       website: https://www.analytics-iq.com/
       opt_out_url: https://privacyportal.onetrust.com/webform/f6a59500-f900-4652-b030-0cd51afe15a5/87ca07e4-e06c-4ad8-9aa6-ccbbaa8750c1
+      description: Predictive consumer analytics and people-based marketing data
       region: us
       category: marketing
       priority: medium
@@ -655,6 +683,7 @@ brokers:
       email: ""
       website: https://www.andrewswharton.com/
       opt_out_url: https://www.stirista.com/opt-out-preferences/
+      description: Marketing data and lead generation
       region: us
       category: marketing
       priority: medium
@@ -689,15 +718,17 @@ brokers:
       email: ""
       website: https://www.clearbit.com/
       opt_out_url: https://preferences.hubspot.com/
+      description: B2B contact database and data enrichment platform
       region: us
       category: marketing
       priority: high
       notes: Clearbit (Apihub) is now part of HubSpot - privacy@clearbit.com redirected DSRs to HubSpot's preference center above (marketing opt-outs at hubspot.com/hubspot-privacy-preferences) (reply received 2026-08-20).
     - id: apollo-interactive
       name: APOLLO INTERACTIVE LLC
-      email: ""
+      email: requests@apollointeractive.com
       website: https://www.apollointeractive.com/
       opt_out_url: https://www.apollointeractive.com/data-rights.php
+      description: B2B contact database and sales prospecting data platform
       region: us
       category: marketing
       priority: low
@@ -728,9 +759,10 @@ brokers:
       priority: medium
     - id: arrakis-technologies
       name: Arrakis Technologies Corp.
-      email: ""
+      email: privacy@arrakis.ai
       website: https://www.arrakis.ai/
       opt_out_url: https://www.arrakis.ai/optout
+      description: Healthcare sales and marketing software and data platform
       region: us
       category: marketing
       priority: low
@@ -776,8 +808,9 @@ brokers:
       priority: high
     - id: atlantic-fox-technologies
       name: Atlantic Fox Technologies, Inc.
-      email: ""
+      email: privacy@atlanticfox.com
       website: https://www.atlanticfox.com/
+      description: Enterprise data infrastructure and identity resolution platform
       region: us
       category: marketing
       priority: low
@@ -820,9 +853,11 @@ brokers:
       email: ""
       website: https://www.automotivemastermind.com/
       opt_out_url: https://www.automotivemastermind.com/do-not-sell-or-share-my-personal-information-request/
+      description: Automotive dealer lead generation and marketing data
       region: us
       category: marketing
       priority: low
+      notes: 'General contact: info@automotivemastermind.com; web form preferred'
     - id: autoweb
       name: Autoweb, Inc.
       email: autolegal@autoweb.com
@@ -844,14 +879,17 @@ brokers:
       email: legal@evercommerce.com
       website: https://www.remodeling.com/
       opt_out_url: https://remodeling.com/do-not-sell/
+      description: Lead generation for home services and disaster mitigation contractors
       region: us
       category: marketing
       priority: medium
+      notes: 'Operates under EverCommerce; privacy contact: privacy@33mileradius.com'
     - id: azerion-us
       name: Azerion US Inc.
       email: ""
       website: https://www.azerion.com/
       opt_out_url: https://www.hybridtheory.com/opt-out/
+      description: Ad-tech platform with pseudonymous device-level targeting data
       region: us
       category: device-id-only
       priority: low
@@ -1008,6 +1046,7 @@ brokers:
       email: joshua.hirsch@thebridgecorp.com
       website: https://www.thebridgecorp.com/
       opt_out_url: https://www.thebridgecorp.com/opt-out/
+      description: People-based marketing platform with consumer profile data
       region: us
       category: marketing
       priority: medium
@@ -1045,13 +1084,15 @@ brokers:
       email: privacy@billtrust.com
       website: https://www.billtrust.com/
       opt_out_url: https://privacyportal.onetrust.com/webform/82a6a736-b3a7-4e87-a2fd-04a39b7d2b19/2f5dc7b8-7698-4623-82d2-b2b969ef901e
+      description: Business credit information and accounts receivable management
       region: us
       category: marketing
       priority: medium
     - id: buildertrend-solutions
       name: Buildertrend Solutions, Inc.
-      email: ""
+      email: privacy@buildertrend.com
       website: https://www.buildertrend.com/
+      description: Construction project management and contractor lead generation
       region: us
       category: marketing
       priority: medium
@@ -1124,8 +1165,9 @@ brokers:
       priority: low
     - id: careerbuilder
       name: Careerbuilder, LLC
-      email: ""
+      email: riskandcompliance@careerbuilder.com
       website: https://www.careerbuilder.com/
+      description: Employment job board and candidate profile data platform
       region: us
       category: marketing
       priority: medium
@@ -1133,17 +1175,19 @@ brokers:
       notes: 'privacy@careerbuilder.com bounced; no working email found. CareerBuilder privacy requests now route through Monster''s web form. Updated 2026-08-20.'
     - id: car-market-solutions
       name: Car Market Solutions LLC
-      email: ""
+      email: solutions@carmarketsolutions.com
       notes: Email ben@carmarketsolutions.com hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.carmarketsolutions.com/
+      description: Automotive lead generation and market data for dealerships
       region: us
       category: marketing
       priority: low
     - id: carry-technologies
       name: Carry Technologies, Inc
-      email: ""
+      email: datadeletion@hightouch.com
       website: https://www.hightouch.com/
       opt_out_url: https://preferences.hightouch.com
+      description: Data activation platform syncing warehouse data to SaaS applications
       region: us
       category: marketing
       priority: low
@@ -1161,14 +1205,16 @@ brokers:
       email: ggruver@catalist.us
       website: https://www.catalist.us/
       opt_out_url: https://catalist.us/your-privacy-choices/
+      description: Voter database of 240M+ US voting-age individuals from election records
       region: us
       category: marketing
       priority: low
     - id: catalyze-ai
       name: Catalyze Ai, Inc
-      email: ""
+      email: privacy@catalyzeai.com
       website: https://www.catalyzeai.com/
       opt_out_url: https://www.catalyzeai.com/opt-out
+      description: Predictive analytics lead-generation platform for financial services
       region: us
       category: marketing
       priority: medium
@@ -1224,15 +1270,17 @@ brokers:
       email: ""
       website: https://www.searchpublicrecords.com/
       opt_out_url: https://www.searchpublicrecords.com/help-center/privacy-requests
+      description: Public-records aggregator publishing names, addresses, court filings
       region: us
       category: marketing
       priority: high
       notes: Doesn't process removal requests via email - use the privacy request form at the opt_out_url.
     - id: civis-analytics
       name: Civis Analytics, Inc
-      email: ""
+      email: dataprotection@civisanalytics.com
       website: https://www.civisanalytics.com/
       opt_out_url: https://www.civisanalytics.com/privacy-policy/supplemental-privacy-notice/
+      description: Data science and voter analytics platform for political campaigns
       region: us
       category: marketing
       priority: medium
@@ -1266,6 +1314,7 @@ brokers:
       email: privacy@clearcompany.com
       website: https://www.clearcompany.com/
       opt_out_url: https://optout.networkadvertising.org/
+      description: Talent management and HR acquisition software
       region: us
       category: marketing
       priority: low
@@ -1306,6 +1355,7 @@ brokers:
       notes: 'Opt-out form (collectivedata.io) requires a Mobile Advertising ID and notes requests are device-specific; no name/email path offered.'
       website: https://www.collectivedata.io/
       opt_out_url: https://www.collectivedata.io/opt-out-do-not-sell-request-process/
+      description: Mobile device ID and location data marketplace
       region: us
       category: device-id-only
       priority: low
@@ -1322,6 +1372,7 @@ brokers:
       email: ""
       website: https://www.crexi.com/
       opt_out_url: https://crexi.bigidprivacy.cloud/consumer/#/o2TCsG9LJ7
+      description: Commercial real estate data platform with 153M+ property records
       region: us
       category: marketing
       priority: low
@@ -1364,6 +1415,7 @@ brokers:
       notes: Email support@calltruth.com hard-bounced (2026-08-23) - domain has no working mail server (DNS MX lookup failed).
       website: https://www.calltruth.com/
       opt_out_url: https://www.calltruth.com/opt_out.php
+      description: Reverse phone lookup aggregating public records and provider data
       region: us
       category: marketing
       priority: medium
@@ -1380,6 +1432,7 @@ brokers:
       email: ""
       website: https://www.connextdigital.com/
       opt_out_url: https://www.connextdigital.com/opt-out/
+      description: Email marketing and customer data hygiene services
       region: us
       category: marketing
       priority: medium
@@ -1401,6 +1454,7 @@ brokers:
     - id: consumer-canvas
       name: CONSUMER CANVAS LLC
       email: privacy@consumercanvas.net
+      description: Consumer data enrichment platform scoring 250M adults on 60K+ attributes
       region: us
       category: marketing
       priority: low
@@ -1439,6 +1493,7 @@ brokers:
       email: support@convexlabs.io
       website: https://www.convex.com/
       opt_out_url: https://www.convex.com/request-removal
+      description: Commercial property intelligence linking buildings to businesses
       region: us
       category: marketing
       priority: medium
@@ -1446,6 +1501,7 @@ brokers:
       name: Costar Group
       email: ""
       website: https://www.costar.com/
+      description: Commercial real estate information platform for brokers and investors
       region: us
       category: marketing
       priority: low
@@ -1455,6 +1511,7 @@ brokers:
       name: Crawlbee Corp
       email: ""
       website: https://www.crawlbee.com/
+      description: Web scraping service providing real estate and consumer marketing data
       region: us
       category: marketing
       priority: low
@@ -1464,6 +1521,7 @@ brokers:
       name: Credit Bureau Of Council Bluffs, Inc
       email: heather@creditinfosystems.com
       website: https://www.creditinfosystems.com/
+      description: Credit reporting and lending risk assessment services since 1915
       region: us
       category: marketing
       priority: low
@@ -1496,6 +1554,7 @@ brokers:
       name: Crunchbase Inc
       email: privacy@crunchbase.com
       website: https://www.crunchbase.com/
+      description: Private company database with funding data and business intelligence
       region: us
       category: marketing
       priority: low
@@ -1553,6 +1612,7 @@ brokers:
       email: supplier@datadelivers.com
       website: https://www.datadelivers.com/
       opt_out_url: https://datadelivers.com/unsubscribe/
+      description: Customer data platform for restaurants unifying guest data
       region: us
       category: marketing
       priority: medium
@@ -1640,9 +1700,10 @@ brokers:
       priority: low
     - id: datonics
       name: Datonics, LLC
-      email: ""
+      email: privacy@datonics.com
       website: https://www.datonics.com/
       opt_out_url: https://www.datonics.com/privacy/privacy-choices
+      description: Audience data aggregator for targeting and CRM enrichment
       region: us
       category: marketing
       priority: low
@@ -1691,6 +1752,7 @@ brokers:
       email: ""
       website: https://www.deeprootanalytics.com/
       opt_out_url: https://privacy.deeprootanalytics.com/
+      description: Republican political data broker with profiles on 198M US voters
       region: us
       category: marketing
       priority: medium
@@ -1729,9 +1791,12 @@ brokers:
       email: dataprivacy@demandscience.com
       website: https://www.demandscience.com/
       opt_out_url: https://demandscience.com/privacy-policy-ccpa/
+      description: B2B buyer intelligence platform for software and technology sales
       region: us
       category: marketing
       priority: low
+      notes: Replied that it "operates strictly within a business-to-business (B2B) context" and does not ingest, process or store personal consumer data - only Business Contact Information. Tagged b2b-only on that statement; it will suppress a corporate email or LinkedIn URL on request, which is a separate ask from erasure.
+      tags: [b2b-only]
     - id: demyst-data
       name: Demyst Data, Ltd
       email: privacy@demystdata.com
@@ -1758,10 +1823,11 @@ brokers:
       priority: medium
     - id: digicenter
       name: Digicenter, LLC.
-      email: ""
+      email: privacy@digicenter.com
       notes: 'Opt-out form (via the same collectivedata.io platform as collective-data-solutions) requires a Mobile Advertising ID; explicitly says not to enter a phone number.'
       website: https://www.digicenter.com/
       opt_out_url: https://www.collectivedata.io/opt-out-do-not-sell-request-process/
+      description: Device ID targeting and audience data platform for mobile advertising
       region: us
       category: device-id-only
       priority: low
@@ -1775,8 +1841,9 @@ brokers:
       priority: medium
     - id: digital-safety-products
       name: Digital Safety Products, LLC
-      email: ""
+      email: privacy@spyfly.com
       website: https://www.spyfly.com/
+      description: People-search site with background checks and public records data
       region: us
       category: marketing
       priority: high
@@ -1817,6 +1884,7 @@ brokers:
       email: privacy@disconetwork.com
       website: https://www.disconetwork.com/
       opt_out_url: https://support.disconetwork.com/hc/en-us/articles/4418121857819-CCPA-on-Disco#h_01GZPTPA4SPX26NA7E7HP5KHYS
+      description: Commerce media network for post-purchase audience targeting and offers
       region: us
       category: marketing
       priority: medium
@@ -1862,6 +1930,7 @@ brokers:
       email: privacy@dstillery.com
       website: https://www.dstillery.com/
       opt_out_url: https://www.dstillery.com/
+      description: Predictive AI company for audience targeting and behavioral advertising
       region: us
       category: marketing
       priority: low
@@ -1906,9 +1975,10 @@ brokers:
       notes: 'Rebranded as Lightcast; use the privacy request form at opt_out_url instead of email - form is the required removal path per user.'
     - id: edvisors-network
       name: Edvisors Network, Inc.
-      email: ""
+      email: privacy@edvisors.com
       website: https://www.edvisors.com/
       opt_out_url: https://www.edvisors.com/third-party-opt-out/
+      description: Student loan comparison and financial education platform
       region: us
       category: marketing
       priority: low
@@ -1964,6 +2034,7 @@ brokers:
       name: Email Marketing Services, Inc
       email: ""
       website: https://www.listmatch.com/
+      description: Direct mail and email list targeting service provider
       region: us
       category: marketing
       priority: low
@@ -2019,8 +2090,10 @@ brokers:
     - id: epsilon-data-management
       name: EPSILON DATA MANAGEMENT LLC
       email: ""
+      notes: 'Same company as the `epsilon` entry, which already carries privacy@epsilon.com and has been written to. Left address-less deliberately so a send run does not email Epsilon twice; use the opt_out_url here (legal.epsilon.com/dsr) if the request to `epsilon` goes unanswered.'
       website: https://www.epsilon.com/
       opt_out_url: https://legal.epsilon.com/dsr/
+      description: Marketing technology and customer data platform for personalized experiences
       region: us
       category: marketing
       priority: high
@@ -2029,6 +2102,7 @@ brokers:
       email: privacyinquiry@propstream.com
       website: https://www.propstream.com/
       opt_out_url: https://www.propstream.com/privacy-request
+      description: Real estate data and property information platform for investors
       region: us
       category: marketing
       priority: low
@@ -2049,9 +2123,10 @@ brokers:
       priority: medium
     - id: consumerbase
       name: Consumerbase LLC
-      email: ""
+      email: privacy@exactdata.com
       website: https://www.exactdata.com/
       opt_out_url: https://www.data-axle.com/do-not-sell-my-data/
+      description: Direct mail list provider with consumer and business contact data
       region: us
       category: marketing
       priority: medium
@@ -2074,10 +2149,11 @@ brokers:
       priority: low
     - id: exponential-interactive
       name: Exponential Interactive, Inc.
-      email: ""
+      email: privacy@vdx.tv
       notes: 'Privacy policy: data is "completely anonymized and de-identified" - can''t honor requests requiring identification of a specific person/device; wants a tribalfusion.com ANON_ID cookie value instead.'
       website: https://www.vdx.tv/
       opt_out_url: https://www.vdx.tv/policies/privacy#opting-out
+      description: Video advertising platform for omnichannel digital media campaigns
       region: us
       category: device-id-only
       priority: medium
@@ -2109,6 +2185,7 @@ brokers:
       email: ""
       website: https://www.famousbirthdays.com/
       opt_out_url: https://www.famousbirthdays.com/contact
+      description: Celebrity database and biographical information site
       region: us
       category: marketing
       priority: low
@@ -2130,9 +2207,10 @@ brokers:
       priority: low
     - id: fideo-intelligence
       name: Fideo Intelligence, Inc.
-      email: ""
+      email: privacy@fideo.ai
       website: https://www.fideo.ai/
       opt_out_url: https://app.fideo.ai/your-privacy-choices/
+      description: Identity and network intelligence platform for fraud prevention
       region: us
       category: marketing
       priority: low
@@ -2230,6 +2308,7 @@ brokers:
       notes: Email privacy@thefourleaf.com hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.fourleafdata.com/
       opt_out_url: https://www.fourleafdata.com/privacy-policy
+      description: Direct mail and audience targeting list provider
       region: us
       category: marketing
       priority: medium
@@ -2261,6 +2340,7 @@ brokers:
       name: FREE DATA SERVICES LLC
       email: support@truepeoplesearch.com
       website: https://www.truepeoplesearch.com/
+      description: People-search and public records database site
       region: us
       category: marketing
       priority: high
@@ -2269,6 +2349,7 @@ brokers:
       email: ""
       website: https://www.reachdata.com/
       opt_out_url: ""
+      description: Sales and recruiting platform aggregating business contact information
       region: us
       category: marketing
       priority: low
@@ -2298,10 +2379,11 @@ brokers:
       priority: low
     - id: fullcontact
       name: Fullcontact, Inc.
-      email: ""
+      email: privacy@fullcontact.com
       notes: 'Reply says identity must be verified via their Privacy Choices portal before they''ll act on the request (2026-08-21).'
       website: https://www.fullcontact.com/
       opt_out_url: https://platform.fullcontact.com/your-privacy-choices
+      description: Identity resolution and data enrichment platform for marketing and sales targeting
       region: us
       category: marketing
       priority: high
@@ -2404,6 +2486,7 @@ brokers:
       email: privacy@grayhairsoftware.com
       website: https://www.grayhairsoftware.com/
       opt_out_url: https://www.grayhairsoftware.com/privacy-policy/#Do-Not-Sell-My-Personal-Information
+      description: Postal tracking and mail data analytics platform for mailers and marketing agencies
       region: us
       category: marketing
       priority: medium
@@ -2412,6 +2495,7 @@ brokers:
       email: ""
       website: https://www.greatlakeslists.com/
       opt_out_url: https://www.greatlakeslists.com/opt_out_request.php
+      description: Direct mail and mailing list management services for marketing campaigns
       region: us
       category: marketing
       priority: low
@@ -2420,6 +2504,7 @@ brokers:
       name: Greenhouse Software, Inc.
       email: privacy@greenhouse.io
       website: https://www.greenhouse.com/
+      description: Applicant tracking system and hiring platform for recruitment management
       region: us
       category: marketing
       priority: low
@@ -2428,6 +2513,7 @@ brokers:
       email: ""
       website: https://www.grin.co/
       opt_out_url: https://grin.co/data-privacy-form/
+      description: Influencer marketing platform with creator database and campaign management
       region: us
       category: marketing
       priority: low
@@ -2437,6 +2523,7 @@ brokers:
       email: ""
       website: https://www.growbots.com/
       opt_out_url: https://forms.gle/S7vW6zXPwgtnZ9ZF9
+      description: Sales prospecting automation platform with 180M+ contact database
       region: us
       category: marketing
       priority: medium
@@ -2460,6 +2547,7 @@ brokers:
       email: jeff@gundir.com
       website: https://www.gundersondirect.com/
       opt_out_url: https://gundir.com/opt-out/
+      description: Direct mail marketing agency specializing in account-based marketing campaigns
       region: us
       category: marketing
       priority: low
@@ -2528,6 +2616,7 @@ brokers:
       email: contact@swordfish.ai
       website: https://www.swordfish.ai/
       opt_out_url: https://heartbeat.ai/optout
+      description: B2B contact data platform and identity verification for recruiting and sales
       region: us
       category: marketing
       priority: medium
@@ -2559,6 +2648,7 @@ brokers:
       name: General Information Solutions LLC
       email: support@backgroundchecks.com
       website: https://www.backgroundchecks.com/
+      description: Employment background screening and identity verification services
       region: us
       category: marketing
       priority: low
@@ -2607,6 +2697,7 @@ brokers:
       name: Hubspot, Inc.
       email: privacy@hubspot.com
       website: https://www.hubspot.com/
+      description: CRM platform, email marketing, and sales automation software for businesses
       region: us
       category: marketing
       priority: low
@@ -2627,9 +2718,10 @@ brokers:
       priority: low
     - id: hybrid-theory
       name: Hybrid Theory
-      email: ""
+      email: dpo@azerion.com
       website: https://www.hybridtheory.com/
       opt_out_url: https://www.hybridtheory.com/opt-out/
+      description: Cookie-based audience data and device ID matching platform for ad targeting
       region: us
       category: device-id-only
       priority: low
@@ -2652,10 +2744,11 @@ brokers:
       priority: medium
     - id: idengine
       name: Idengine LLC
-      email: ""
+      email: contact@idengine.ai
       notes: Email chad@idengine.ai hard-bounced (2026-08-23) - domain has no working mail server (DNS MX lookup failed).
       website: https://www.idengine.com/
       opt_out_url: https://idengine.com/dnsmpi/
+      description: Identity verification and people search data platform for verification services
       region: us
       category: marketing
       priority: low
@@ -2684,9 +2777,10 @@ brokers:
       priority: medium
     - id: imprint-analytics
       name: Imprint Analytics LLC
-      email: ""
+      email: privacy@imprintanalytics.io
       website: https://www.imprintanalytics.io/
       opt_out_url: https://imprintanalytics.io/limit-the-use-of-my-sensitive-personal-information/
+      description: Advertising audience data and marketing analytics platform for publishers
       region: us
       category: marketing
       priority: low
@@ -2715,10 +2809,11 @@ brokers:
       priority: medium
     - id: infinite-knot
       name: Infinite Knot Inc.
-      email: ""
+      email: support@contacts411.com
       notes: Email barrygold@contacts411.com hard-bounced (2026-08-23) - domain has no working mail server (DNS MX lookup failed).
       website: https://www.contacts411.com/
       opt_out_url: https://www.contacts411.com/opt-out
+      description: People search and contact information lookup service for personal data
       region: us
       category: marketing
       priority: low
@@ -2794,15 +2889,17 @@ brokers:
       email: ""
       website: https://www.ruf.com/
       opt_out_url: https://infutor.com/privacy-center/
+      description: Data enrichment and consumer information aggregation platform
       region: us
       category: marketing
       priority: low
       notes: security@infutor.com replied that this mailbox can't process DSRs at all; use the form or call 1-866-207-1399 (reply received 2026-08-20).
     - id: inmarket-media
       name: Inmarket Media LLC
-      email: ""
+      email: privacy@inmarket.com
       website: https://www.inmarket.com/
       opt_out_url: https://www.inmarket.com/opt-out/
+      description: Location-based marketing and consumer behavior tracking platform
       region: us
       category: marketing
       priority: low
@@ -2819,6 +2916,7 @@ brokers:
       email: compliance@idatabasesolutions.com
       website: https://www.idatabasesolutions.com/
       opt_out_url: https://idatabasesolutions.com/do-not-sell-my-personal-info/
+      description: Data enrichment and B2B sales intelligence database for business contacts
       region: us
       category: marketing
       priority: low
@@ -2834,6 +2932,7 @@ brokers:
       name: InsideView, Inc.
       email: ""
       website: https://www.insideview.com/
+      description: CRM data enrichment and sales intelligence software for B2B lead management
       region: us
       category: marketing
       priority: low
@@ -2851,6 +2950,7 @@ brokers:
       email: ""
       notes: Email bzink@integratedmedicaldata.com hard-bounced (2026-08-23) - domain has no working mail server (DNS MX lookup failed).
       website: https://www.integratedmedicaldata.com/
+      description: Healthcare data provider offering medical mailing lists for marketing and research
       region: us
       category: marketing
       priority: low
@@ -2883,6 +2983,7 @@ brokers:
       email: ""
       website: https://www.intentiq.com/
       opt_out_url: https://www.intentiq.com/opt-out/
+      description: Cookieless advertising platform delivering targeted ads across websites and apps
       region: us
       category: marketing
       priority: low
@@ -3017,6 +3118,7 @@ brokers:
       email: ""
       website: https://www.jmr-media.com/
       opt_out_url: https://jmr-media.com/do-not-sell
+      description: Data-driven email and direct mail marketing platform for targeted consumer outreach
       region: us
       category: marketing
       priority: low
@@ -3040,9 +3142,10 @@ brokers:
       notes: 'Domain jverify.com is parked/for sale on GoDaddy (checked 2026-08-20) - company defunct.'
     - id: kargo-global
       name: Kargo Global LLC
-      email: ""
+      email: privacyinfo@kargo.com
       website: https://www.kargo.com/
       opt_out_url: https://www.kargo.com/privacy-portal
+      description: Omnichannel advertising platform for mobile, CTV and social targeting and brand campaigns
       region: us
       category: device-id-only
       priority: low
@@ -3120,6 +3223,7 @@ brokers:
       email: ""
       website: https://www.koddi.com/
       opt_out_url: https://koddi.com/dsr-form
+      description: Ad technology platform for travel, retail and food service vertical marketing and bidding
       region: us
       category: marketing
       priority: low
@@ -3185,6 +3289,7 @@ brokers:
       email: ""
       website: https://www.leadershipconnect.io/
       opt_out_url: https://www.leadershipconnect.io/opt-out
+      description: B2B government and policy contact database for public sector procurement and influence
       region: us
       category: marketing
       priority: medium
@@ -3209,14 +3314,16 @@ brokers:
       email: ""
       website: https://www.leadmemedia.com/
       opt_out_url: https://policy.leadmemedia.com/California/californiaform.html
+      description: Permission-based email and retargeting platform collecting and marketing consumer leads
       region: us
       category: marketing
       priority: medium
       notes: 'postmaster@leadmemedia.com bounced: "couldn''t be forwarded from texasregistry@leadmemedia.com to another email address" - forwarding is broken; opt_out_url already on file as fallback (reply received 2026-08-20).'
     - id: leadpost
       name: Leadpost, LLC
-      email: ""
+      email: privacy@leadpost.com
       website: https://www.leadpost.com/
+      description: Website visitor identification platform capturing anonymous visitor data for retargeting
       region: us
       category: marketing
       priority: medium
@@ -3259,6 +3366,7 @@ brokers:
       email: ""
       notes: Email brenton@outlastdfs.com hard-bounced (2026-08-23) - domain has no working mail server (DNS MX lookup failed).
       website: https://www.outlastdfs.com/
+      description: Daily fantasy sports and sports betting platform
       region: us
       category: marketing
       priority: low
@@ -3314,6 +3422,7 @@ brokers:
       email: dataremoval@listservicedirect.com
       website: https://www.listservicedirect.com/
       opt_out_url: https://listservicedirect.com/opt-out/
+      description: Marketing data broker providing consumer and business mailing lists
       region: us
       category: marketing
       priority: medium
@@ -3322,6 +3431,7 @@ brokers:
       name: Listsonline
       email: privacyofficer@listsonline.com
       website: https://www.listsonline.com/
+      description: Data broker and list broker aggregating consumer data for marketing
       region: us
       category: marketing
       priority: medium
@@ -3353,6 +3463,7 @@ brokers:
       notes: Email sabira@localblox.com hard-bounced (2026-08-23) - recipient server rejected all delivery attempts.
       website: https://www.localblox.com/
       opt_out_url: https://consumer.localblox.com/privacy_policy
+      description: Customer intelligence platform aggregating local business profiles and neighborhood data
       region: us
       category: marketing
       priority: low
@@ -3368,6 +3479,7 @@ brokers:
       name: Logiq, Inc
       email: ""
       website: https://www.logiq.com/
+      description: E-commerce digital customer acquisition platform with data-driven marketing analytics
       region: us
       category: marketing
       priority: low
@@ -3378,6 +3490,7 @@ brokers:
       email: ""
       website: https://www.lookify.io/
       opt_out_url: https://www.lookify.io/opt-out
+      description: Reverse phone lookup and people-search service publishing caller information
       region: us
       category: marketing
       priority: medium
@@ -3394,6 +3507,7 @@ brokers:
       email: ""
       website: https://www.lotadata.com/
       opt_out_url: https://lotadata.com/personal_information
+      description: Location data and geospatial intelligence provider for targeted advertising
       region: us
       category: marketing
       priority: low
@@ -3449,6 +3563,7 @@ brokers:
       email: privacy@madhive.com
       website: https://www.madhive.com/
       opt_out_url: https://www.madhive.com/legal/us-state-privacy-notice#optOut
+      description: Ad-tech platform for connected-TV and digital advertising with data marketplace
       region: us
       category: marketing
       priority: low
@@ -3465,6 +3580,7 @@ brokers:
       notes: 'Privacy notice: needs "Digital Identifiers" (device/browser identifiers) to act on access/correction/deletion requests; doesn''t process directly-identifying info like names.'
       website: https://www.magnite.com/
       opt_out_url: https://www.magnite.com/legal/user-choice-portal/#optout
+      description: Independent sell-side advertising platform monetizing publisher content across formats
       region: us
       category: device-id-only
       priority: medium
@@ -3520,6 +3636,7 @@ brokers:
       email: ""
       website: https://www.matchandappend.com/
       opt_out_url: https://www.matchandappend.com/do-not-sell-my-data/
+      description: B2B data matching and enrichment platform for CRM deduplication and account linking
       region: us
       category: marketing
       priority: medium
@@ -3530,14 +3647,16 @@ brokers:
       notes: Replied that they only work with mobile advertising identifiers, not personal identifiers like name/email/phone (2026-08-21) - can't be fulfilled via this tool's profile data.
       website: https://www.matchbookdata.com/
       opt_out_url: https://www.matchbookdata.com/opt-out-form/
+      description: Advertising data broker with identity augmentation using location and device identifiers
       region: us
       category: device-id-only
       priority: medium
     - id: maxmind
       name: MAXMIND Inc
-      email: ""
+      email: privacy@maxmind.com
       website: https://www.maxmind.com/
       opt_out_url: https://www.maxmind.com/en/data-deletion-and-verification
+      description: IP geolocation and fraud detection data provider for content customization and security
       region: us
       category: marketing
       priority: low
@@ -3570,6 +3689,7 @@ brokers:
       email: privacy@media.net
       website: https://www.media.net/
       opt_out_url: https://www.media.net/optout/
+      description: Independent sell-side advertising platform for publishers monetizing digital content
       region: us
       category: marketing
       priority: low
@@ -3595,6 +3715,7 @@ brokers:
       notes: Email mvolpe@mediasourcesolutions.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.mediasourcesolutions.com/
       opt_out_url: https://unsubscribe.stirista.com/
+      description: Marketing data provider offering audience segmentation and identity resolution services
       region: us
       category: marketing
       priority: medium
@@ -3648,10 +3769,11 @@ brokers:
       notes: Merkle is a dentsu brand for privacy-request purposes (confirmed via dentsu's privacy request form, which lists Merkle as a selectable brand) - contact routed to the group DPO rather than an individual employee address. The separate dentsu-inc entry was merged into this one.
     - id: message-digital
       name: MESSAGE DIGITAL LLC
-      email: ""
+      email: privacy@messagedigital.com
       notes: Auto-reply says privacy requests "must be submitted through our Privacy Request form... or by calling +1 (888)..." (2026-08-21), not email - use the opt_out_url form instead.
       website: https://www.messagedigital.com/
       opt_out_url: https://www.messagedigital.com/my-data
+      description: Email and SMS campaign platform for data-intensive digital marketing with audience targeting
       region: us
       category: marketing
       priority: low
@@ -3690,6 +3812,7 @@ brokers:
       email: ""
       website: https://www.realtors.minervadata.xyz/
       opt_out_url: https://preferences.minerva.io
+      description: Real estate data and lead generation platform identifying potential sellers and buyers
       region: us
       category: marketing
       priority: medium
@@ -3707,6 +3830,7 @@ brokers:
       notes: 'Global opt-out page: "we cannot process your request without a valid MAID [Mobile Advertising ID]" even with an email address provided.'
       website: https://www.mobilewalla.com/
       opt_out_url: https://www.mobilewalla.com/global-opt-out-request
+      description: Mobile advertising data broker collecting location and device identifier data
       region: us
       category: device-id-only
       priority: low
@@ -3727,10 +3851,11 @@ brokers:
       priority: low
     - id: modigie
       name: Modigie Inc.
-      email: ""
+      email: support@modigie.com
       notes: Email privacy@modigie.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.modigie.com/
       opt_out_url: https://privacyportal.onetrust.com/webform/4a8e10dc-2293-42ea-ad06-886bc22167a6/20341940-11c2-4c43-9b64-194e952203fd
+      description: B2B sales enablement platform validating and enriching mobile contact data for sales teams
       region: us
       category: marketing
       priority: medium
@@ -3740,6 +3865,7 @@ brokers:
       notes: Replied that they only match on mobile advertising identifiers (device/cookie ID), not name/email/etc (2026-08-21) - can't be fulfilled via this tool's profile data; needs manual follow-up with a device ID if you have one.
       website: https://www.mogean.com/
       opt_out_url: https://www.mogean.com/opt-out
+      description: Mobile advertising platform matching on device and cookie identifiers only
       region: us
       category: device-id-only
       priority: medium
@@ -3841,6 +3967,7 @@ brokers:
       email: ""
       notes: Email office.privacy@ncr.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.ncr.com/
+      description: Large technology corporation offering retail, hospitality and financial services software
       region: us
       category: marketing
       priority: low
@@ -3857,6 +3984,7 @@ brokers:
       email: ""
       notes: Email privacy@near.co hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.near.co/
+      description: Location intelligence platform providing consumer movement and place data for marketing
       region: us
       category: marketing
       priority: low
@@ -3903,6 +4031,7 @@ brokers:
       notes: 'Reply directs to this privacy-request portal instead of email (2026-08-21); old opt_out_url (adroll.com) replaced with their current one.'
       website: https://www.nextroll.com/
       opt_out_url: https://nextroll-privacy.relyance.ai/
+      description: Demand-side platform for programmatic advertising across display, social, video and CTV
       region: us
       category: marketing
       priority: medium
@@ -3920,6 +4049,7 @@ brokers:
       notes: 'Auto-reply points to this web form for privacy requests (2026-08-21).'
       website: https://www.nexxagroup.com/
       opt_out_url: https://privacyportal.onetrust.com/webform/c02129bc-bbab-43a6-a0b4-175489cb893e/156ac96a-9d7e-4fe6-bab8-a44df779202b
+      description: Direct marketing database provider specializing in energy, broadband and telecommunications
       region: us
       category: marketing
       priority: medium
@@ -3929,6 +4059,7 @@ brokers:
       notes: 'Auto-reply points to this data subject rights request page (2026-08-21).'
       website: https://www.nexxen.com/
       opt_out_url: https://nexxen.com/privacy-data-subject-rights-request/
+      description: Full-funnel advertising platform for programmatic digital and connected TV advertising
       region: us
       category: marketing
       priority: medium
@@ -3962,6 +4093,7 @@ brokers:
       notes: Email support@nimbler.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.nymblr.com/
       opt_out_url: https://www.nymblr.com
+      description: B2B lead generation and data enrichment platform with business contact information
       region: us
       category: marketing
       priority: low
@@ -3978,6 +4110,7 @@ brokers:
       email: ""
       notes: Email privacy@onemata.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.onemata.com/
+      description: Mobile location data provider offering raw location data with device identifiers
       region: us
       category: marketing
       priority: medium
@@ -4057,6 +4190,7 @@ brokers:
       notes: Email compliance@pushint.com hard-bounced (2026-08-24) - domain has no working mail server (DNS MX lookup failed).
       website: https://www.pushint.com/
       opt_out_url: https://pushint.com/manage-my-data
+      description: Data broker collecting personal information from owned and operated websites
       region: us
       category: marketing
       priority: low
@@ -4074,6 +4208,7 @@ brokers:
       notes: 'Opt-out form requires an Advertising ID or Installation ID to process requests. OUTLOGIC LLC is X-Mode Social''s current name (rebranded 2023) - the separate x-mode-social entry (same opt_out_url) was merged into this one.'
       website: https://www.outlogic.io/
       opt_out_url: https://outlogic.io/opt-out-form/
+      description: Geolocation data broker collecting and licensing mobile device location information
       region: us
       category: device-id-only
       priority: low
@@ -4091,6 +4226,7 @@ brokers:
       notes: 'Reply (as "MonitorBase") says to use a Data Deletion and Opt-Out Form (URL not captured from the reply) instead of email, or email to arrange a phone call (2026-08-21) - the existing opt_out_url is only their privacy policy page, not confirmed to be the actual form.'
       website: https://www.monitorbase.com/
       opt_out_url: https://my.monitorbase.com/privacypolicy
+      description: Predictive analytics platform for mortgage lead generation and borrower monitoring
       region: us
       category: marketing
       priority: low
@@ -4100,6 +4236,7 @@ brokers:
       notes: Email tpowell@owneriq.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.owneriq.com/
       opt_out_url: https://www.owneriq.com/privacy-notice.html#opt-out
+      description: Second-party data marketplace for shopping and purchasing data between retailers and brands
       region: us
       category: marketing
       priority: low
@@ -4125,6 +4262,7 @@ brokers:
       notes: Email ccpa@paramountdirectmarketing.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.paramountdirectmarketing.com/
       opt_out_url: https://www.paramountdirectmarketing.com/opt_out_request.php
+      description: Mailing list and direct marketing data broker specializing in lifestyle consumer segments
       region: us
       category: marketing
       priority: medium
@@ -4173,6 +4311,7 @@ brokers:
       notes: Auto-reply says this address "cannot accept consumer privacy rights requests" (2026-08-21) - use the portal form, or call 1-800-327-2720.
       opt_out_url: https://www.pbinfo.com/crf/
       website: https://www.pbinfo.com/
+      description: Population management and beneficiary research services for pension plans and insurers
       region: us
       category: marketing
       priority: medium
@@ -4207,6 +4346,7 @@ brokers:
       notes: 'Reply says to submit full name, city/state, and age via this opt-out page instead of email (2026-08-21).'
       opt_out_url: https://www.peoplewhiz.com/optout
       website: https://www.peoplewhiz.com/
+      description: People search data broker publishing names, addresses, phone numbers and public records
       region: us
       category: marketing
       priority: high
@@ -4246,6 +4386,7 @@ brokers:
       notes: Email privacy@placeiq.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.precisely.com/
       opt_out_url: https://www.precisely.com/your-privacy-choices
+      description: Location data and foot traffic analytics platform for marketing and consumer insights
       region: us
       category: marketing
       priority: medium
@@ -4270,6 +4411,7 @@ brokers:
       email: ""
       notes: Email george@plmrkg.com hard-bounced (2026-08-24) - recipient server rejected all delivery attempts.
       website: https://www.plmrkg.com/
+      description: Marketing data broker providing consumer lead lists and contact data
       region: us
       category: marketing
       priority: low
@@ -4351,6 +4493,7 @@ brokers:
       notes: 'Reply says to self-service search and remove your listing (US residents only) rather than email; requires responding to a confirmation email once found (2026-08-21) - use the existing opt_out_url.'
       website: https://www.privaterecords.net/
       opt_out_url: https://www.privaterecords.net/optOut/name/landing
+      description: People-search site publishing names, addresses, and phone numbers from public records
       region: us
       category: marketing
       priority: high
@@ -4389,6 +4532,7 @@ brokers:
       name: Property Reach LP
       email: compliance@propertyreach.com
       website: https://www.propertyreach.com/
+      description: Property database with ownership records, deeds, mortgages, and investment lead generation
       region: us
       category: marketing
       priority: high
@@ -4398,6 +4542,7 @@ brokers:
       notes: Email privacy@prospectordatabase.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.prospectordatabase.com/
       opt_out_url: https://www.prospectordatabase.com/privacy-center
+      description: B2B sales-intelligence database with business contact records
       region: us
       category: marketing
       priority: low
@@ -4407,6 +4552,7 @@ brokers:
       notes: Email aleex.de.aybar@outlook.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.proximaplatform.com/
       opt_out_url: https://www.proximaplatform.com/opt-out-portal
+      description: AI-powered consumer intelligence platform with shopper profiles and transactional data
       region: us
       category: marketing
       priority: low
@@ -4416,6 +4562,7 @@ brokers:
       notes: 'Reply confirms they operate on digital identifiers only and "do not recognize" name/email - can''t be fulfilled via this tool''s profile data without a digital identifier (2026-08-21).'
       website: https://www.pubmatic.com/
       opt_out_url: https://pubmatic.com/legal/opt-out/
+      description: Ad-tech supply-side platform for programmatic advertising; operates on digital identifiers only
       region: us
       category: device-id-only
       priority: low
@@ -4425,6 +4572,7 @@ brokers:
       notes: 'Privacy policy: requests need PulsePoint cookies, a MAID, or an IP address - they generally hold only pseudonymous data, no name/email path. (Email was already cleared separately after a hard bounce.)'
       website: https://www.pulsepoint.com/
       opt_out_url: https://www.pulsepoint.com/legal/platform-privacy-policy#opt-out
+      description: Programmatic healthcare advertising platform with health data and digital identifiers
       region: us
       category: device-id-only
       priority: medium
@@ -4434,6 +4582,7 @@ brokers:
       notes: 'Reply says this email "is no longer part of our data subject request process and it is not being monitored" (2026-08-21) - use the form, or call (877)860-0086.'
       opt_out_url: https://docs.google.com/forms/d/e/1FAIpQLSdXAQsI4b0angLCONbwT4B4YSFiPyVMMLzizCuBSnPZmsTp_g/viewform
       website: https://www.purecars.com/
+      description: Automotive digital marketing platform with customer data management and dealer intelligence
       region: us
       category: marketing
       priority: low
@@ -4459,6 +4608,7 @@ brokers:
       notes: 'Reply confirms they don''t collect PII (name/DOB/phone/email/address) - only a Mobile Advertising ID (MAID) or Advertising ID (AAID) can be used to search their records (2026-08-22).'
       website: https://www.quadrant.io/
       opt_out_url: https://www.quadrant.io/opt-out
+      description: Mobile location and audience data provider with MAIDs and hashed email datasets
       region: us
       category: device-id-only
       priority: low
@@ -4483,6 +4633,7 @@ brokers:
       notes: Email privacy@rampedup.io hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.rampedup.io/
       opt_out_url: https://basic.rampedup.io/app/donotsell
+      description: B2B contact data solutions provider with email validation and data appending services
       region: us
       category: marketing
       priority: low
@@ -4531,6 +4682,7 @@ brokers:
       notes: Email cform@realitymediainc.com hard-bounced (2026-08-24) - recipient server rejected all delivery attempts.
       website: https://www.realitydebtsolutions.com/
       opt_out_url: https://www.realitydebtsolutions.com/do-not-sell-my-personal-information/
+      description: Lead generation service for debt management, settlement, and credit repair industries
       region: us
       category: marketing
       priority: low
@@ -4556,6 +4708,7 @@ brokers:
       notes: Email accounting@therecruitbot.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.recruitbot.com/
       opt_out_url: https://recruitbot.com/removal-request/
+      description: AI recruitment platform sourcing candidates from database of 655 million profiles
       region: us
       category: marketing
       priority: high
@@ -4595,6 +4748,7 @@ brokers:
       email: ""
       notes: Email jonny.bell@refinitiv.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.refinitiv.com/
+      description: Financial data, news, and analytics provider for trading and investment markets
       region: us
       category: marketing
       priority: low
@@ -4604,6 +4758,7 @@ brokers:
       notes: Email privacy@bvdinfo.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.bvdinfo.com/
       opt_out_url: https://survey.alchemer.com/s3/8249180/Do-Not-Sell-Request
+      description: Compliance and anti-money laundering (AML) data provider with regulatory screening databases
       region: us
       category: marketing
       priority: medium
@@ -4620,6 +4775,7 @@ brokers:
       notes: 'Reply also offers a direct deletion link at reklaimyou.com/delete-my-account (2026-08-21) - different domain than the existing opt_out_url (reklaimyours.com), not verified which is authoritative so left opt_out_url as-is.'
       website: https://www.reklaimyours.com/
       opt_out_url: https://www.reklaimyours.com/optout/
+      description: Consumer data marketplace and privacy tools provider offering opt-outs and breach monitoring
       region: us
       category: marketing
       priority: low
@@ -4652,6 +4808,7 @@ brokers:
       notes: Email privacy@researchusallc.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.researchusallc.com/
       opt_out_url: https://privacycompliance.biz/researchusallc-ccpa/
+      description: B2C marketing database with consumer and business data compiled from public sources
       region: us
       category: marketing
       priority: low
@@ -4660,6 +4817,7 @@ brokers:
       email: privacy@resonate.com
       website: https://www.resonate.com/
       opt_out_url: https://ds.reson8.com/opt-out.gif?lp=https://www.resonate.com/ccpa-do-not-sell/
+      description: AI-driven consumer data and psychographic targeting platform with 230 million consumer profiles
       region: us
       category: marketing
       priority: medium
@@ -4669,6 +4827,7 @@ brokers:
       notes: Email dataprivacy_rocadvertising@simpleoptoutcompliance.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.rocadvertising.com/
       opt_out_url: https://www.rocadvertising.com/privacy-policy/#donotsell
+      description: Direct mail marketing services with consumer database management for healthcare industry
       region: us
       category: marketing
       priority: medium
@@ -4702,6 +4861,7 @@ brokers:
       notes: 'Reply points to this Google Form for removal requests (2026-08-21).'
       website: https://www.revenuebase.ai/
       opt_out_url: https://forms.gle/5Cab6bJcRtqVzAJS8
+      description: B2B revenue data infrastructure provider with 390M+ contacts and AI-native contact database
       region: us
       category: marketing
       priority: low
@@ -4740,6 +4900,7 @@ brokers:
       email: support@rocketreach.co
       website: https://www.rocketreach.co/
       opt_out_url: https://rocketreach.co/claim-profile/
+      description: B2B sales database with professional contact records and company information
       region: us
       category: marketing
       priority: high
@@ -4757,6 +4918,7 @@ brokers:
       notes: 'Reply says they "no longer take requests through this email" and to use the portal or call 866-338-5513 (2026-08-21) - email address added to their suppression list regardless.'
       website: https://www.rooftopdigital.com/
       opt_out_url: https://www.consumerdataprotect.com/?ref=rooftopdigital.com
+      description: Data broker providing consumer data and opt-out/data removal services
       region: us
       category: marketing
       priority: low
@@ -4814,9 +4976,10 @@ brokers:
       priority: low
     - id: saha-ventures
       name: Saha Ventures LLC
-      email: ""
+      email: ops@findtrueowner.com
       notes: Email harmik@propertyownerlookup.io hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.findtrueowner.com/
+      description: Property owner contact information database for real estate professionals and investors
       region: us
       category: marketing
       priority: low
@@ -4844,9 +5007,10 @@ brokers:
       priority: low
     - id: free-stream-media
       name: Free Stream Media Corp.
-      email: ""
+      email: privacy@samba.tv
       website: https://www.samba.tv/
       opt_out_url: 'https://privacyportal-cdn.onetrust.com/dsarwebform/87c5ee85-893d-4972-ba26-2e82b743d041/d84d9664-facb-4de3-85fd-a2e339b73dbf.html'
+      description: Audience data collection and targeting for broadcast TV and streaming advertising
       region: us
       category: marketing
       priority: low
@@ -4856,6 +5020,7 @@ brokers:
       email: ""
       notes: Email admin@sawyerdatadirect.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.sawyerlists.com/
+      description: Marketing data lists and customer targeting for direct mail, email, and telemarketing
       region: us
       category: marketing
       priority: low
@@ -4868,9 +5033,10 @@ brokers:
       priority: low
     - id: scalable-commerce
       name: Scalable Commerce, LLC
-      email: ""
+      email: privacy@kidslivesafe.com
       website: https://www.kidslivesafe.com/
       opt_out_url: https://www.kidslivesafe.com/help-center/privacy-requests
+      description: Public record search service for names, addresses, phone numbers
       region: us
       category: marketing
       priority: high
@@ -4889,6 +5055,7 @@ brokers:
       notes: Email privacy@date-detective.app hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.date-detective.app/
       opt_out_url: https://mobile.date-detective.app/investigate-opt-out?origin=website
+      description: Dating app with background check and public record search capabilities
       region: us
       category: marketing
       priority: low
@@ -4921,6 +5088,7 @@ brokers:
       notes: 'Reply says the Privacy Request Center is the designated method and this address "does not respond to initial access, correction, deletion, or opt-out" requests (2026-08-21) - but does accept a follow-up email reply containing Full Name, Country/State, City, Email, and Phone if the portal can''t be used.'
       website: https://www.seamless.ai/
       opt_out_url: http://preferences.seamless.ai
+      description: B2B sales intelligence database of business contacts, emails, and firmographics
       region: us
       category: marketing
       priority: medium
@@ -4937,6 +5105,7 @@ brokers:
       notes: 'Reply says to submit an opt-out via this form (2026-08-21); may require ID verification.'
       website: https://www.searchbug.com/
       opt_out_url: https://www.searchbug.com/ccpa.aspx#DoNoSell
+      description: People search and reverse lookup service with address, phone, and email verification
       region: us
       category: marketing
       priority: high
@@ -4946,6 +5115,7 @@ brokers:
       notes: 'Reply says they operate a cookie-based service and don''t store name/address/phone/email, so can''t act on email requests (2026-08-21) - use the existing opt_out_url instead.'
       website: https://www.semasio.com/
       opt_out_url: https://www.semasio.com/legal/privacy-choices
+      description: Ad-tech contextual targeting and semantic audience solutions; cookie/device-ID based
       region: us
       category: device-id-only
       priority: low
@@ -5005,9 +5175,10 @@ brokers:
       priority: low
     - id: similarweb
       name: Similarweb Ltd.
-      email: ""
+      email: legal@similarweb.com
       website: https://www.similarweb.com/
       opt_out_url: https://similarweb.privacy.saymine.io/similarweb
+      description: Website analytics and traffic data for competitive intelligence and market research
       region: us
       category: marketing
       priority: low
@@ -5017,6 +5188,7 @@ brokers:
       email: privacy@simiocloud.com
       website: https://www.simiocloud.com/
       opt_out_url: https://simiocloud.com/optout
+      description: Donor database and fundraising data for nonprofits and political organizations
       region: us
       category: marketing
       priority: medium
@@ -5058,6 +5230,7 @@ brokers:
       notes: Email steven@smacomm.com hard-bounced (2026-08-24) - recipient server rejected all delivery attempts.
       website: https://www.smacomm.com/
       opt_out_url: https://smacomm.com/do-not-sell/
+      description: Political and consumer data lists with voter records, demographics, and contact info
       region: us
       category: marketing
       priority: low
@@ -5074,6 +5247,7 @@ brokers:
       email: welcome@socialcatfish.com
       website: https://www.socialcatfish.com/
       opt_out_url: https://www.socialcatfish.com/opt-out/?id=request_optout
+      description: Dating verification and online identity investigation service; people search
       region: us
       category: marketing
       priority: high
@@ -5090,6 +5264,7 @@ brokers:
       email: ""
       notes: Email dataprivacy@sourceitmarketing.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.sourceitmarketing.com/
+      description: Sales and marketing solutions, lead generation platform for B2B outreach
       region: us
       category: marketing
       priority: low
@@ -5102,10 +5277,11 @@ brokers:
       priority: low
     - id: sourcescrub
       name: Sourcescrub LLC
-      email: ""
+      email: privacy@sourcescrub.com
       notes: Email dataprivacy@sourcescrub.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.sourcescrub.com/
       opt_out_url: https://www.sourcescrub.com/legal/do-not-sell-my-personal-information
+      description: B2B deal sourcing platform with business contact and executive data
       region: us
       category: marketing
       priority: low
@@ -5155,6 +5331,7 @@ brokers:
       email: privacy@spycloud.com
       website: https://www.spycloud.com/
       opt_out_url: https://www.spycloud.com/contact-us/
+      description: Darknet-sourced stolen credential and PII data for enterprise cybersecurity threats
       region: us
       category: marketing
       priority: high
@@ -5163,6 +5340,7 @@ brokers:
       email: ""
       website: https://www.spydialer.com/
       opt_out_url: https://www.spydialer.com/Consumers/
+      description: Reverse phone lookup service identifying U.S. phone numbers and caller information
       region: us
       category: marketing
       priority: high
@@ -5172,6 +5350,7 @@ brokers:
       email: ""
       website: https://www.stackadapt.com/
       opt_out_url: https://www.stackadapt.com/legal-document-centre/opt-out-of-sale-targeted-advertising
+      description: Demand-side platform for programmatic advertising across channels; device-ID and cookie based
       region: us
       category: device-id-only
       priority: low
@@ -5181,6 +5360,7 @@ brokers:
       email: ""
       notes: Email optout@staircase.co hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.staircase.co/
+      description: B2B mortgage technology and loan origination platform for financial services
       region: us
       category: marketing
       priority: medium
@@ -5190,6 +5370,7 @@ brokers:
       notes: 'Opt-out page''s primary/stated mechanism explicitly requires an Advertising ID (AAID/IDFA), with detailed instructions on finding it since it''s hidden by default; the phone hotline is only a secondary CCPA fallback, not a name/email path - the corrected email address is unlikely to get this processed either.'
       website: https://www.start.io/
       opt_out_url: https://www.start.io/do-not-sell-or-sharemy-personal-information/
+      description: Mobile supply-side platform (ad-tech) with device-ID and location-based targeting
       region: us
       category: device-id-only
       priority: low
@@ -5222,6 +5403,7 @@ brokers:
       notes: Auto-reply says personal-information requests should go through the opt_out_url form, "the designated channel" (2026-08-21).
       website: https://www.steppingblocks.com/
       opt_out_url: https://www.steppingblocks.com/personal-information-inquiry
+      description: Higher education career outcomes and alumni engagement platform; B2B for colleges/universities
       region: us
       category: marketing
       priority: high
@@ -5287,6 +5469,7 @@ brokers:
       notes: Email stuartmcnair@fusable.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.fusable.com/
       opt_out_url: https://privacyportal.onetrust.com/webform/49a9a972-547e-4c49-b23c-4cc77554cacb/3aab0bde-ec0c-4ce9-8e6f-cf12a9a950a5
+      description: Industrial data, insights and market intelligence for construction, trucking and agricultural sectors
       region: us
       category: marketing
       priority: low
@@ -5323,10 +5506,11 @@ brokers:
       priority: low
     - id: swoopcom
       name: Swoop.Com, Inc.
-      email: ""
+      email: privacyrights@swoop.com
       notes: 'Auto-reply points to their Privacy Choices form (2026-08-21); appeals go to privacyrights@swoop.com.'
       website: https://www.swoop.com/
       opt_out_url: https://swoop.com/your-privacy-choices/
+      description: Healthcare audience targeting and predictive analytics using de-identified patient data
       region: us
       category: marketing
       priority: low
@@ -5339,9 +5523,10 @@ brokers:
       priority: low
     - id: amplemarket
       name: Amplemarket
-      email: ""
+      email: privacy@amplemarket.com
       website: https://www.amplemarket.com/
       opt_out_url: https://www.amplemarket.com/legal/do-not-sell-my-info
+      description: B2B sales prospecting platform; business contact database for lead generation
       region: us
       category: marketing
       priority: medium
@@ -5413,6 +5598,7 @@ brokers:
       notes: Email explicitly "will not be processed" (2026-08-21) - The Data Group is a processor for its clients, not a data controller; use the portal form.
       opt_out_url: https://thedatagroup.com/consumer-optout-request-form/
       website: https://www.thedatagroup.com/
+      description: Data processor providing data services to client organizations
       region: us
       category: marketing
       priority: low
@@ -5429,6 +5615,7 @@ brokers:
       notes: Email info@openpeoplesearch.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.openpeoplesearch.com/
       opt_out_url: https://www.openpeoplesearch.com/Consumer
+      description: People-search site publishing names, addresses and phone numbers from public records
       region: us
       category: marketing
       priority: high
@@ -5437,6 +5624,7 @@ brokers:
       email: support@peoplesearcher.com
       website: https://www.peoplesearcher.com/
       opt_out_url: https://www.peoplesearcher.com/optOut/name/landing
+      description: People-search site publishing names, addresses and phone numbers from public records
       region: us
       category: marketing
       priority: high
@@ -5461,6 +5649,7 @@ brokers:
       email: support@fetcher.ai
       website: https://www.fetcher.ai/
       opt_out_url: https://app.fetcher.ai/opt-out
+      description: B2B lead generation and business intelligence platform
       region: us
       category: marketing
       priority: medium
@@ -5487,6 +5676,7 @@ brokers:
       notes: Auto-reply asks requester to also fill in the opt_out_url form to complete the request (2026-08-21).
       website: https://www.traackr.com/
       opt_out_url: https://www.traackr.com/data-opt-out
+      description: Influencer marketing platform with database of 15+ million creators and audience data
       region: us
       category: marketing
       priority: low
@@ -5495,6 +5685,7 @@ brokers:
       email: ""
       notes: Email compliance@tracersinfo.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.tracersinfo.com/
+      description: Investigative research platform accessing 43+ billion public and private records
       region: us
       category: marketing
       priority: low
@@ -5541,6 +5732,7 @@ brokers:
       email: support@checksecrets.com
       website: https://www.checksecrets.com/
       opt_out_url: https://www.checksecrets.com/optOut/name/landing.
+      description: People-search and background check service
       region: us
       category: marketing
       priority: high
@@ -5558,6 +5750,7 @@ brokers:
       notes: 'Auto-reply directs privacy requests to their Privacy Center, not email (2026-08-21) - use the portal, or call 1-866-498-2784.'
       website: https://www.tunnldata.com/
       opt_out_url: https://privacy.tunnldata.com/
+      description: Location and demographic data broker; audience identification for advertising
       region: us
       category: marketing
       priority: medium
@@ -5566,6 +5759,7 @@ brokers:
       email: ""
       notes: Email bmorgan@twinedata.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.twinedata.com/
+      description: Mobile data exchange platform for app publishers and data monetization
       region: us
       category: marketing
       priority: low
@@ -5575,6 +5769,7 @@ brokers:
       notes: Email privacyofficer@datacomplianceportal.com hard-bounced (2026-08-23) - address not found.
       website: https://www.tymaxmedia.com/
       opt_out_url: https://www.tymaxmedia.com/ccpa.php
+      description: Lead generation and direct response marketing data broker; debt and financial focus
       region: us
       category: marketing
       priority: medium
@@ -5584,6 +5779,7 @@ brokers:
       notes: Ubermedia was acquired by Azira and no longer exists as a separate entity (2026-08-21) - privacy@ubermedia.com/privacy@um.co are dead. Use the Azira TrustArc portal URL instead of email.
       opt_out_url: https://submit-irm.trustarc.com/services/validation/0a80503b-1d56-4d50-a898-4377a0227dab
       website: https://www.ubermedia.com/
+      description: Marketing and audience data platform
       region: us
       category: marketing
       priority: low
@@ -5601,6 +5797,7 @@ brokers:
       notes: Auto-reply says "no longer able to process privacy requests submitted by email" (2026-08-21) - use the opt_out_url form instead.
       website: https://www.unearthcampaigns.com/
       opt_out_url: https://www.unearthcampaigns.com/opt-out/
+      description: Marketing data broker and voter targeting platform
       region: us
       category: marketing
       priority: medium
@@ -5726,6 +5923,7 @@ brokers:
       notes: Auto-reply asks requester to complete identity verification via a portal linked in their reply before the request is processed (2026-08-21).
       website: https://www.veraset.com/
       opt_out_url: https://www.veraset.com/do-not-sell-my-personal-information
+      description: Location data and real-world data provider for advertising and targeting
       region: us
       category: marketing
       priority: medium
@@ -5741,6 +5939,7 @@ brokers:
       email: optout@versium.com
       website: https://www.versium.com/
       opt_out_url: https://versium.com/ccpa-opt-out
+      description: Data enrichment and identity resolution provider for marketing and analytics
       region: us
       category: marketing
       priority: medium
@@ -5756,15 +5955,17 @@ brokers:
       email: bnojima@viantinc.com
       website: https://www.viantinc.com/
       opt_out_url: https://www.viantinc.com/privacy-policy/#opt-out
+      description: Programmatic advertising DSP for omnichannel campaigns across Connected TV, linear TV, mobile, display, audio
       region: us
       category: marketing
       priority: medium
     - id: videoamp
       name: Videoamp, Inc.
-      email: ""
+      email: CCPAPrivacy@VideoAmp.com
       notes: 'Consumer rights page requires a device/advertising identifier to locate and act on a request; no name/email-only path offered.'
       website: https://www.videoamp.com/
       opt_out_url: https://www.videoamp.com/consumer-rights-under-ccpa
+      description: Media measurement platform linking TV and streaming viewership data to advertising outcomes
       region: us
       category: device-id-only
       priority: low
@@ -5781,6 +5982,7 @@ brokers:
       email: ""
       website: https://www.visitiq.io/
       opt_out_url: https://visitiq.io/data-rights-and-privacy/
+      description: AI-powered marketing intelligence platform for audience identification and campaign activation
       region: us
       category: marketing
       priority: low
@@ -5790,6 +5992,7 @@ brokers:
       email: ""
       website: https://www.vistarmedia.com/
       opt_out_url: https://www.vistarmedia.com/privacy-choices
+      description: Programmatic digital out-of-home advertising platform connecting brands with billboards and digital displays
       region: us
       category: device-id-only
       priority: low
@@ -5845,6 +6048,7 @@ brokers:
       notes: 'Reply says to self-service search and remove your listing here (US residents only) rather than email; requires responding to a confirmation email once found (2026-08-21).'
       website: https://www.weinform.org/
       opt_out_url: https://www.weinform.org/api/helper/optOutLight/search
+      description: People search site publishing names, addresses and phone numbers from public records
       region: us
       category: marketing
       priority: high
@@ -5854,6 +6058,7 @@ brokers:
       notes: Email clear.pm-compliance@thomsonreuters.com hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.thomsonreuters.com/
       opt_out_url: https://www.thomsonreuters.com/ccpa-dsar
+      description: Thomson Reuters legal publishing and public records database provider
       region: us
       category: marketing
       priority: high
@@ -5877,14 +6082,16 @@ brokers:
       email: ""
       notes: Email support@whoodle.com hard-bounced (2026-08-24) - domain has no working mail server (DNS MX lookup failed).
       website: https://www.whoodle.com/
+      description: People search and data broker platform for background information and public records lookup
       region: us
       category: marketing
       priority: low
     - id: wiland
       name: Wiland Inc
-      email: ""
+      email: privacy@wiland.com
       website: https://www.wiland.com/
       opt_out_url: https://wiland.com/privacy-choices/#how-to-submit-privacy-choices
+      description: Consumer intelligence platform with predictive marketing data from spending and engagement signals
       region: us
       category: marketing
       priority: low
@@ -5895,6 +6102,7 @@ brokers:
       notes: 'Reply says to submit via this webform or call (800) 946-6710 to verify identity (2026-08-21).'
       website: https://www.windfalldata.com/
       opt_out_url: https://my.datasubject.com/AkrxLuYOww/60579
+      description: Wealth and career intelligence platform for go-to-market teams; B2B data enrichment and lead scoring
       region: us
       category: marketing
       priority: low
@@ -5916,10 +6124,11 @@ brokers:
       priority: medium
     - id: wiza
       name: Wiza, Inc.
-      email: ""
+      email: hello@wiza.co
       notes: 'Reply says to submit removal via this form instead of email (2026-08-21).'
       website: https://www.wiza.co/
       opt_out_url: https://wiza.co/optout-contact-info
+      description: B2B prospecting tool with real-time verified contact data for sales and recruiting teams
       region: us
       category: marketing
       priority: low
@@ -5940,10 +6149,11 @@ brokers:
       priority: low
     - id: xad
       name: Xad, Inc.
-      email: ""
+      email: privacyrights@groundtruth.com
       notes: 'GroundTruth (Xad''s current brand) consumer-rights page requires a device/advertising identifier; no name/email-only path offered.'
       website: https://www.groundtruth.com/
       opt_out_url: https://www.groundtruth.com/privacy-rights/
+      description: Location-based advertising platform; performance ads and store visit measurement
       region: us
       category: device-id-only
       priority: medium
@@ -5967,6 +6177,7 @@ brokers:
       notes: Email admin@yobi.ventures hard-bounced (2026-08-21) - address/domain invalid.
       website: https://www.yobi.ventures/
       opt_out_url: https://www.yobi.ventures/opt-out
+      description: Behavioral AI and marketing data company; privacy-preserving consumer intelligence models
       region: us
       category: marketing
       priority: low
@@ -5976,6 +6187,7 @@ brokers:
       notes: 'Reply says to complete this form to begin verification (2026-08-21).'
       website: https://www.appily.com/
       opt_out_url: https://privacyportal.onetrust.com/webform/2d4f8bee-b269-434d-a07f-3b94c6618cb4/cd569dda-42b0-4868-a25d-e0eb517fb8a6
+      description: College planning and student data platform connecting students with educational institutions
       region: us
       category: marketing
       priority: medium
@@ -5984,6 +6196,7 @@ brokers:
       email: privacy@apollo.io
       website: https://www.apollo.io/
       opt_out_url: https://www.apollo.io/privacy-policy/remove
+      description: B2B sales intelligence platform with verified contact and company data for sales teams
       region: us
       category: marketing
       priority: high
@@ -6001,6 +6214,7 @@ brokers:
       notes: 'Auto-reply says their Privacy Choices Portal is "the most efficient way", and that a request made by email must include the requester''s LinkedIn URL or it "cannot take action" (2026-08-21) - this tool doesn''t collect that field.'
       website: https://www.seekout.com/
       opt_out_url: http://www.seekout.com/privacy/choices
+      description: AI-powered recruiting platform for talent acquisition and candidate sourcing at scale
       region: us
       category: marketing
       priority: medium
@@ -6044,6 +6258,7 @@ brokers:
       email: ""
       website: ""
       opt_out_url: ""
+      description: Financial B2B data broker (EU-based)
       region: eu
       category: financial-b2b
       priority: medium
@@ -6150,6 +6365,7 @@ brokers:
       email: ""
       website: https://www.peoplefinders.com
       opt_out_url: https://www.peoplefinders.com/opt-out
+      description: People search platform with background reports and public records lookup services
       region: us
       category: people-search
       priority: high
@@ -6158,6 +6374,7 @@ brokers:
       email: ""
       website: https://publicdatausa.com
       opt_out_url: https://www.publicdatausa.com/optout
+      description: People search platform publishing names, addresses and public records
       region: us
       category: people-search
       priority: high
@@ -6167,6 +6384,7 @@ brokers:
       email: ""
       website: http://smartbackgroundchecks.com
       opt_out_url: https://www.smartbackgroundchecks.com/optout
+      description: Background check and people search platform; criminal records and public data lookup
       region: us
       category: background-check
       priority: high
@@ -6175,6 +6393,7 @@ brokers:
       email: ""
       website: https://www.peoplelooker.com
       opt_out_url: https://www.beenverified.com/app/optout/search
+      description: People search platform with background reports, addresses, phone numbers and public records
       region: us
       category: people-search
       priority: high
@@ -6192,6 +6411,7 @@ brokers:
       email: ""
       website: https://www.411.com
       opt_out_url: https://www.whitepages.com/suppression-requests
+      description: People-search site publishing names, addresses, phone numbers from public records
       region: us
       category: people-search
       priority: high
@@ -6209,6 +6429,7 @@ brokers:
       email: privacy@infotracer.com
       website: http://infotracer.com
       opt_out_url: https://infotracer.com/optout/
+      description: People-search site offering background checks and personal records lookups
       region: us
       category: people-search
       priority: high
@@ -6217,14 +6438,16 @@ brokers:
       email: ""
       website: http://cyberbackgroundchecks.com
       opt_out_url: https://www.cyberbackgroundchecks.com/removal
+      description: Background check and people-search site providing personal records
       region: us
       category: background-check
       priority: high
     - id: peoplesearchnow
       name: PeopleSearchNow
-      email: ""
+      email: privacy@peoplesearchnow.com
       website: https://www.peoplesearchnow.com
       opt_out_url: https://www.peoplesearchnow.com/opt-out
+      description: People-search site publishing names, addresses, phone numbers
       region: us
       category: people-search
       priority: high
@@ -6238,9 +6461,10 @@ brokers:
       priority: high
     - id: usa-people-search
       name: USA People Search
-      email: ""
+      email: support@usa-people-search.com
       website: http://usa-people-search.com
       opt_out_url: https://www.usa-people-search.com/manage
+      description: People-search site offering personal records and contact information
       region: us
       category: people-search
       priority: high
@@ -6257,6 +6481,7 @@ brokers:
       email: privacy@searchquarry.com
       website: https://www.searchquarry.com
       opt_out_url: https://members.searchquarry.com/opt-out
+      description: People-search service offering background checks and personal records
       region: us
       category: people-search
       priority: high
@@ -6273,6 +6498,7 @@ brokers:
       email: ""
       website: https://publicrecords.com
       opt_out_url: https://suppression.peopleconnect.us/login
+      description: People-search site publishing public records and personal information
       region: us
       category: people-search
       priority: high
@@ -6288,8 +6514,10 @@ brokers:
     - id: unitedstatesphonebook
       name: United States Phone Book
       email: ""
+      notes: 'Fronts the same service as the `usphonebook` entry, which carries info@usphonebook.com and is the one to write to. Left address-less so a run does not contact usphonebook.com twice.'
       website: http://www.unitedstatesphonebook.com
       opt_out_url: https://www.unitedstatesphonebook.com/contact.php
+      description: Phone number directory and people-search service
       region: us
       category: people-search
       priority: high
@@ -6298,9 +6526,11 @@ brokers:
       email: ""
       website: https://www.anywho.com
       opt_out_url: https://suppression.peopleconnect.us/?brand=Intelius
+      description: Phone number and people-search directory
       region: us
       category: people-search
       priority: high
+      notes: Operated by Intelius; directs removal requests to Spokeo
     - id: peoplebyname
       name: PeopleByName
       email: support@peoplebyname.com
@@ -6314,6 +6544,7 @@ brokers:
       email: ""
       website: http://freepeopledirectory.com
       opt_out_url: https://www.freepeopledirectory.com/optout
+      description: Free people-search directory publishing personal contact information
       region: us
       category: people-search
       priority: high
@@ -6350,9 +6581,10 @@ brokers:
       priority: high
     - id: findpeoplesearch
       name: FindPeopleSearch
-      email: ""
+      email: support@findpeoplesearch.com
       website: https://findpeoplesearch.com
       opt_out_url: https://www.findpeoplesearch.com/customerservice/
+      description: People-search service offering background checks and personal records
       region: us
       category: people-search
       priority: medium
@@ -6368,6 +6600,7 @@ brokers:
       email: ""
       website: https://opendatausa.com
       opt_out_url: https://opendatausa.com/optout
+      description: People-search and public records data directory
       region: us
       category: people-search
       priority: medium
@@ -6376,14 +6609,16 @@ brokers:
       email: ""
       website: https://backgroundcheck.run
       opt_out_url: https://backgroundcheck.run/ng/control/privacy
+      description: Background check and people-search service
       region: us
       category: background-check
       priority: medium
     - id: archives
       name: Archives.com
-      email: ""
+      email: support@archives.com
       website: https://archives.com
       opt_out_url: https://www.archives.com/?_act=Optout
+      description: Historical records and genealogy search database
       region: us
       category: people-search
       priority: medium
@@ -6391,14 +6626,16 @@ brokers:
       name: Owler
       email: support@owler.com
       website: https://owler.com
+      description: Business profiles and company intelligence for market research
       region: global
       category: marketing
       priority: medium
     - id: pimeyes
       name: PimEyes
-      email: ""
+      email: privacy@pimeyes.com
       website: https://pimeyes.com
       opt_out_url: https://pimeyes.com/en/opt-out-request-form
+      description: Reverse face-search engine for finding images of individuals online
       region: global
       category: data-intermediary
       priority: high
@@ -6407,6 +6644,7 @@ brokers:
       email: ""
       website: https://facecheck.id
       opt_out_url: https://facecheck.id/Face-Search/RemoveMyPhotos
+      description: Reverse face-search engine for finding photos and videos online
       region: global
       category: data-intermediary
       priority: high
@@ -6524,6 +6762,7 @@ brokers:
       email: datenschutz@postdirekt.de
       website: https://service.postdirekt.de/portal
       opt_out_url: https://www.deutschepost.de/de/d/deutsche-post-direkt/kontakt.html?thema=Datenschutz%20%28z.B.%20Widerspruch%20zur%20Datenverwendung%29
+      description: Direct marketing database and postal mailing list service
       region: eu
       category: marketing
       priority: high
@@ -6539,6 +6778,7 @@ brokers:
       name: Dun & Bradstreet Deutschland GmbH
       email: datenschutz.de@dnb.com
       website: https://www.dnb.com/de-de
+      description: B2B sales intelligence and business contact database
       region: eu
       category: marketing
       priority: high
@@ -6546,6 +6786,7 @@ brokers:
       name: EURO-PRO Ges. für Data Processing mbH
       email: datenschutz@europro.de
       website: https://www.europro.de
+      description: Financial data processing and B2B business intelligence service
       region: eu
       category: financial-b2b
       priority: high
@@ -6576,6 +6817,7 @@ brokers:
       name: infoscore Consumer Data GmbH
       email: ICD-Datenschutz@experian.com
       website: https://www.experian.de
+      description: Credit decision analytics and fraud detection for financial institutions
       region: eu
       category: financial-b2b
       priority: high
@@ -6599,6 +6841,7 @@ brokers:
       name: Media Information Systems Deutschland GmbH
       email: datenschutz@mismail.de
       website: https://mediainformationsystems.de
+      description: Direct-mail address database provider; postal marketing targeting data only
       region: eu
       category: marketing
       priority: medium
@@ -6613,6 +6856,7 @@ brokers:
       name: panadress marketing intelligence GmbH
       email: datenschutz@panadress.de
       website: http://www.panadress.de
+      description: Marketing intelligence database; addresses, customer personas, geomarketing data
       region: eu
       category: marketing
       priority: high
@@ -6650,6 +6894,7 @@ brokers:
       name: SCHUFA Holding AG
       email: datenschutz@schufa.de
       website: https://www.schufa.de
+      description: Credit bureau holding credit scores and payment history on 68+ million individuals
       region: eu
       category: financial-b2b
       priority: high
@@ -6664,6 +6909,7 @@ brokers:
       name: Lursoft IT
       email: ""
       website: https://www.lursoft.lv
+      description: Latvian business register and company officer data reseller
       region: eu
       category: data-intermediary
       priority: high
@@ -6672,6 +6918,7 @@ brokers:
       name: Firmas.lv
       email: ""
       website: https://www.firmas.lv
+      description: Latvian Enterprise Register and business information database
       region: eu
       category: data-intermediary
       priority: high
@@ -6680,6 +6927,7 @@ brokers:
       name: Creditinfo Latvija
       email: ""
       website: https://creditinfo.lv
+      description: Credit reference bureau holding credit and financial data
       region: eu
       category: financial-b2b
       priority: high
@@ -6688,6 +6936,7 @@ brokers:
       name: 1188 (Lattelecom Info)
       email: ""
       website: https://www.1188.lv
+      description: Latvian phone directory and people-search service
       region: eu
       category: people-search
       priority: high
@@ -6697,6 +6946,7 @@ brokers:
       email: ""
       website: https://www.google.com
       opt_out_url: https://support.google.com/websearch/answer/12719076
+      description: Search engine indexing removal tool (not a data broker)
       region: global
       category: non-broker
       priority: high
@@ -6706,6 +6956,7 @@ brokers:
       email: ""
       website: https://www.bing.com
       opt_out_url: https://www.microsoft.com/en-us/concern/bing
+      description: Search index removal service (not a data broker)
       region: global
       category: non-broker
       priority: high
@@ -6715,6 +6966,7 @@ brokers:
       email: ""
       website: https://optout.aboutads.info
       opt_out_url: https://optout.aboutads.info
+      description: Ad-tech industry opt-out cookie portal (not a data broker)
       region: global
       category: non-broker
       priority: high
@@ -6724,6 +6976,7 @@ brokers:
       email: ""
       website: https://www.optoutprescreen.com
       opt_out_url: https://www.optoutprescreen.com
+      description: US credit bureau prescreened offer opt-out portal (not a data broker)
       region: us
       category: non-broker
       priority: high
@@ -6733,6 +6986,7 @@ brokers:
       email: ""
       website: https://www.donotcall.gov
       opt_out_url: https://www.donotcall.gov
+      description: US FTC telemarketing suppression registry (not a data broker)
       region: us
       category: non-broker
       priority: high
@@ -6742,6 +6996,7 @@ brokers:
       email: ""
       website: https://www.dmachoice.org
       opt_out_url: https://dmachoice.org/static/consumer_choice_tools.php
+      description: US direct-marketing mail preference service (not a data broker)
       region: us
       category: non-broker
       priority: high
@@ -6751,6 +7006,7 @@ brokers:
       email: ""
       website: https://www.ims-dm.com
       opt_out_url: https://www.ims-dm.com/cgi/ddnc.php
+      description: US deceased person marketing suppression register (not a data broker)
       region: us
       category: non-broker
       priority: medium
@@ -6760,6 +7016,7 @@ brokers:
       email: ""
       website: https://www.catalogchoice.org
       opt_out_url: https://www.catalogchoice.org
+      description: Nonprofit mail-order catalog removal service (not a data broker)
       region: us
       category: non-broker
       priority: medium
@@ -6769,6 +7026,7 @@ brokers:
       email: ""
       website: https://www.valpak.com
       opt_out_url: https://www.valpak.com/remove-address
+      description: Coupon mailer removal service (not a data broker)
       region: us
       category: non-broker
       priority: medium
@@ -6777,6 +7035,7 @@ brokers:
       name: PaperKarma
       email: ""
       website: https://www.paperkarma.com
+      description: Third-party junk mail removal service (not a data broker)
       region: us
       category: non-broker
       priority: low
@@ -6795,6 +7054,7 @@ brokers:
       email: ""
       website: https://www.familysearch.org
       opt_out_url: https://submit-irm.trustarc.com/services/validation/b8d6e704-e5b1-42a0-9f86-bbdec35939a1
+      description: Nonprofit genealogy archive publishing records on living people
       region: global
       category: data-intermediary
       priority: medium
@@ -6804,6 +7064,7 @@ brokers:
       email: ""
       website: https://www.chexsystems.com
       opt_out_url: https://www.chexsystems.com/security-freeze/place-freeze
+      description: US consumer banking-history reporting agency
       region: us
       category: financial-b2b
       priority: high

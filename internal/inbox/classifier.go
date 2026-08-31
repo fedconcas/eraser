@@ -140,7 +140,18 @@ var (
 		regexp.MustCompile(`(?i)(we\s+)?do\s+not\s+(collect|hold|process|store)\s+(any\s+)?(personal\s+)?(data|information)\s+(about|on|of)\s+(consumers|individuals|private\s+individuals)`),
 		regexp.MustCompile(`(?i)our\s+(clients|customers|services)\s+are\s+(exclusively\s+|only\s+)?(businesses|companies|b2b)`),
 		regexp.MustCompile(`(?i)we\s+are\s+not\s+a\s+(consumer|data)\s+broker`),
-		regexp.MustCompile(`(?i)(we\s+)?(only\s+)?(hold|process)\s+business\s+contact\s+(data|information)`),
+		regexp.MustCompile(`(?i)(we\s+)?(only\s+)?(hold|process)e?s?\s+business\s+contact\s+(data|information)`),
+		// The shapes a real B2B refusal actually takes, taken from the
+		// DemandScience reply that this classifier filed as a disclosure:
+		// "DemandScience operates strictly within a business-to-business
+		// (B2B) context. Our platform exclusively processes Business Contact
+		// Information (BCI) ... we do not hold consumer records".
+		// Note [^.]{0,N} spans newlines, which matters because these
+		// sentences are hard-wrapped mid-clause in the wire format.
+		regexp.MustCompile(`(?i)operat(es|ing)\s+(strictly\s+|solely\s+|exclusively\s+|only\s+)?(with)?in\s+an?\s+(business[\s-]to[\s-]business|b2b)`),
+		regexp.MustCompile(`(?i)(exclusively|solely|only|strictly)[^.]{0,60}business\s+contact\s+(information|data)`),
+		regexp.MustCompile(`(?i)\bbci\b[^.]{0,40}(corporate|business)\s+(email|contact)`),
+		regexp.MustCompile(`(?i)do\s+not\s+(ingest|collect|hold|process|store)[^.]{0,80}consumer\s+(data|records|information)`),
 	}
 
 	// Pending indicators
@@ -389,14 +400,19 @@ func ClassifyResponse(email *Email) ClassifiedResponse {
 		}
 	}
 
-	// Check B2B-only patterns. Weighted +2: this is a claim about the
-	// company that, once acted on, stops every future send to it, so it
-	// should beat an incidental rejection phrase in the same message
-	// ("we are a B2B provider and have no record of you" is B2B-only, not
-	// a no-record result).
+	// Check B2B-only patterns. Weighted +3, and the weight is doing real
+	// work: this is a claim about the company that, once acted on, stops
+	// every future send to it, so it has to beat both an incidental
+	// rejection phrase in the same message ("we are a B2B provider and have
+	// no record of you" is B2B-only, not a no-record result) and the +3 that
+	// subjectDisclosurePatterns awards for the words "Subject Access
+	// Request" - which appear in the subject line *we* chose and that the
+	// broker is merely quoting back. At +2 the DemandScience reply, whose
+	// body says in three separate sentences that the company holds no
+	// consumer data at all, was filed as a disclosure.
 	for _, pattern := range b2bOnlyPatterns {
 		if pattern.MatchString(content) {
-			scores[ResponseB2BOnly] += 2
+			scores[ResponseB2BOnly] += 3
 		}
 	}
 
