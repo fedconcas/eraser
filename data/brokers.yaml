@@ -467,6 +467,8 @@ brokers:
       region: us
       category: marketing
       priority: low
+      reply_names:
+        - GBG
     - id: acutraq-background-screening
       name: ACUTRAQ Background Screening, Inc.
       email: admin@acutraq.com
