@@ -10,6 +10,15 @@ import (
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
+	// Registers decoders for charsets beyond go-message's built-in handful
+	// (UTF-8, US-ASCII, ISO-8859-1's own narrow default set) - without this,
+	// mail.CreateReader fails outright on any message declaring, say,
+	// iso-8859-1, and parseBody below silently treats that as "no body
+	// available." A live account had several broker replies (an initial
+	// OneTrust "confirm your privacy request" notice, among others) with a
+	// declared charset this package couldn't decode, so they were fetched,
+	// but never had any text to classify or match against.
+	_ "github.com/emersion/go-message/charset"
 	"github.com/emersion/go-message/mail"
 	"github.com/eraser-privacy/eraser/internal/broker"
 	"github.com/eraser-privacy/eraser/internal/config"
@@ -407,7 +416,15 @@ func (m *Monitor) parseBody(email *Email, msg *imap.Message, section *imap.BodyS
 
 	mr, err := mail.CreateReader(r)
 	if err != nil {
-		return nil // No body available; not fatal
+		// Leaves email.Body/HTMLBody empty rather than failing the whole
+		// fetch - one unparseable message (an unsupported charset, a
+		// malformed part) must not cost the rest of the scan. But silent
+		// used to mean invisible: this exact failure (an unregistered
+		// charset) was leaving real broker replies with nothing to classify
+		// or match against, logged as an ordinary successful fetch. Log it
+		// so a recurring cause is at least discoverable.
+		log.Printf("Warning: could not parse body of %q from %s: %v", msg.Envelope.Subject, email.From, err)
+		return nil
 	}
 
 	// Process each part
