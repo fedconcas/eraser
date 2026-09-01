@@ -81,6 +81,89 @@ func helpdeskTenant(domain string) (string, bool) {
 	return "", false
 }
 
+// privacyPlatformSuffixes are shared sending domains used by third-party
+// privacy-request platforms - a service many different companies delegate
+// their whole request/response flow to. Unlike a helpdesk tenant, the domain
+// here doesn't vary per client: OneTrust sends every client's notifications
+// from the same noreply@m.onetrust.com, so the domain says nothing about
+// which broker this is. The client is only named in the display name -
+// sometimes the company's brand ("On behalf of PropStream"), sometimes a
+// parent company's, sometimes literally the address they gave OneTrust as
+// their own contact ("privacy@lightcast.io") - so brokerFromSenderDisplayName
+// matches on that instead.
+var privacyPlatformSuffixes = []string{
+	"onetrust.com",
+}
+
+func isPrivacyPlatformDomain(domain string) bool {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	for _, apex := range privacyPlatformSuffixes {
+		if domain == apex || strings.HasSuffix(domain, "."+apex) {
+			return true
+		}
+	}
+	return false
+}
+
+// domainRoot returns the first label of a domain, normalized the same way a
+// helpdesk tenant slug is - "propstream" for "propstream.com", "lightcast"
+// for "lightcast.io" - so both compare on equal footing.
+func domainRoot(domain string) string {
+	root, _, _ := strings.Cut(domain, ".")
+	return normalizeSlug(root)
+}
+
+// brokerFromSenderDisplayName resolves a broker from the sender's display
+// name, for messages routed through a shared privacy-request platform whose
+// domain never identifies the client (see privacyPlatformSuffixes).
+//
+// Matches on the registrable root of a contacted broker's own domain
+// appearing in the display name - not the broker's ID or Name, which is
+// often not what the platform shows: a broker recorded in the database as
+// "Equimine" but contacted at propstream.com gets a notification whose
+// display name says only "On behalf of PropStream". A minimum root length
+// and a uniqueness requirement guard against a short or generic root
+// matching more than one contacted broker.
+//
+// A broker's ReplyNames are checked the same way, for the case a domain root
+// can never cover: the display name isn't the client's own brand at all, but
+// a parent company's ("GBG Privacy and Data Compliance Team" for Acuant,
+// Inc., a GBG subsidiary) - a fact nothing else in the record captures, so it
+// has to be recorded explicitly.
+func (m *Monitor) brokerFromSenderDisplayName(email *Email) (string, bool) {
+	if !isPrivacyPlatformDomain(email.FromDomain) {
+		return "", false
+	}
+	name := normalizeSlug(email.FromName)
+	if name == "" {
+		return "", false
+	}
+
+	found := make(map[string]bool, 2)
+	for domain, b := range m.brokers {
+		if m.contacted != nil && !m.contacted[b.ID] {
+			continue
+		}
+		if root := domainRoot(domain); len(root) >= 5 && strings.Contains(name, root) {
+			found[b.ID] = true
+			continue
+		}
+		for _, alias := range b.ReplyNames {
+			if slug := normalizeSlug(alias); len(slug) >= 3 && strings.Contains(name, slug) {
+				found[b.ID] = true
+				break
+			}
+		}
+	}
+	if len(found) != 1 {
+		return "", false
+	}
+	for id := range found {
+		return id, true
+	}
+	return "", false
+}
+
 // unattributedID is the broker ID recorded for a genuine reply we can't pin to
 // a broker.
 //
@@ -180,6 +263,12 @@ func (m *Monitor) matchReply(email *Email) ReplyMatch {
 				}
 			}
 		}
+	}
+
+	// Rule 3b: a shared privacy-request platform naming the client in the
+	// sender's display name, not the domain (see brokerFromSenderDisplayName).
+	if id, ok := m.brokerFromSenderDisplayName(email); ok {
+		return ReplyMatch{BrokerID: id, Attributed: true, Via: "privacy-platform sender name"}
 	}
 
 	if !m.subjectLooksLikeOurRequest(email.Subject) {
