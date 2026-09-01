@@ -606,13 +606,13 @@ brokers:
       notes: legal@alikeaudience.com replied that address is no longer in use and gave privacy@alikeaudience.com as the current one (reply received 2026-08-20).
     - id: all-global-resources
       name: All Global Resources, LLC
-      email: privacy@agrgroupinc.com
+      email: ""
       website: https://www.agrgroupinc.com/
       description: Lead generation for home services and disaster mitigation contractors
       region: us
       category: marketing
       priority: low
-      notes: drieke@executiveenergy.com bounced - Gmail's own delivery failure confirmed the executiveenergy.com domain can't be found (not just a one-off DNS blip). All Global Resources operates as AGR Group under parent Executive Energy Management; agrgroupinc.com is live and privacy@agrgroupinc.com is their officially CA-registered contact per oag.ca.gov. Updated 2026-08-20.
+      notes: 'drieke@executiveenergy.com bounced - Gmail''s own delivery failure confirmed the executiveenergy.com domain can''t be found (not just a one-off DNS blip). All Global Resources operates as AGR Group under parent Executive Energy Management; agrgroupinc.com is live and privacy@agrgroupinc.com is their officially CA-registered contact per oag.ca.gov. Updated 2026-08-20. Address privacy@agrgroupinc.com cleared on Sep 2, 2026: mail to it is permanently undeliverable. Bounce said: ** Address not found **'
     - id: all-good-media
       name: All Good Media LLC
       email: marwan@attribits.com
@@ -1538,13 +1538,13 @@ brokers:
       priority: medium
     - id: cross-pixel-media
       name: Cross Pixel Media, Inc.
-      email: stephanie.mccabe@knowertech.ca
+      email: ""
       website: https://www.crosspixel.net/
       opt_out_url: https://privacy.crsspxl.com/optout
       region: us
       category: marketing
       priority: low
-      notes: apearlstein@crosspixel.net replied that Alan has left Cross Pixel Media; forwarded us to Stephanie McCabe, President of Knower Tech (successor company) (reply received 2026-08-20).
+      notes: 'apearlstein@crosspixel.net replied that Alan has left Cross Pixel Media; forwarded us to Stephanie McCabe, President of Knower Tech (successor company) (reply received 2026-08-20). Address stephanie.mccabe@knowertech.ca cleared on Sep 2, 2026: mail to it is permanently undeliverable. Bounce said: ** Address not found **'
     - id: crosswalk-technologies
       name: Crosswalk Technologies Inc
       email: privacy@crosswalknyc.com
@@ -3151,13 +3151,13 @@ brokers:
       notes: 'Kargo splits privacy rights into two flows (checked their portal 2026-08-20): (1) Opt-out of sale/share/targeted-ads - check the box at opt_out_url, or just send a GPC signal from your browser; no identifiers needed. (2) Access/deletion - they track by cookie/device ID, not name, so they can''t look you up from a standard request; email privacyinfo@kargo.com with your Digital Identifiers instead (the ktcid/krg_uid/krg_crb cookies set on kargo.com, or your phone''s IDFA/Android Ad ID) plus what you''re requesting. Email left blank since eraser''s standard template has no way to include those identifiers.'
     - id: kbm-group
       name: KBM GROUP LLC
-      email: DoNotMail@wundermanthompson.com
+      email: ""
       website: https://www.kbmg.com/
       opt_out_url: https://www.kbmg.com/about-us/ccpa-privacy-policy/#optout
       region: us
       category: marketing
       priority: low
-      notes: john.petrillo@wundermandata.com bounced - Gmail's own delivery failure confirmed wundermandata.com can't be found, even though kbmg.com (their actual site) is live. Per their CA data broker registration (oag.ca.gov), current contacts are DoNotMail@wundermanthompson.com and Rachel.glasser@wundermanthompson.com, phone 866-275-4526; opt-out form also on the CCPA privacy policy page above. Updated 2026-08-20.
+      notes: 'john.petrillo@wundermandata.com bounced - Gmail''s own delivery failure confirmed wundermandata.com can''t be found, even though kbmg.com (their actual site) is live. Per their CA data broker registration (oag.ca.gov), current contacts are DoNotMail@wundermanthompson.com and Rachel.glasser@wundermanthompson.com, phone 866-275-4526; opt-out form also on the CCPA privacy policy page above. Updated 2026-08-20. Address donotmail@wundermanthompson.com cleared on Sep 2, 2026: mail to it is permanently undeliverable. Bounce said: ** Address not found **'
     - id: kb-synergy
       name: KB Synergy Inc
       email: info@kbsynergy.com
@@ -3800,12 +3800,13 @@ brokers:
       priority: medium
     - id: milestone-marketing-solutions
       name: Milestone Marketing Solutions
-      email: bgleason@milestonemarketingsolutions.com
+      email: ""
       website: https://www.milestonemarketingsolutions.com/
       opt_out_url: https://www.milestonemarketingsolutions.com/do-not-sell-my-information
       region: us
       category: marketing
       priority: medium
+      notes: 'Address bgleason@milestonemarketingsolutions.com cleared on Sep 2, 2026: mail to it is permanently undeliverable. Bounce said: Learn more here: https://community.mimecast.com/docs/DOC-1369#554'
     - id: minerva-bi
       name: MINERVA BI Inc
       email: ""
@@ -6325,12 +6326,13 @@ brokers:
       priority: high
     - id: clustrmaps
       name: ClustrMaps
-      email: support@clustrmaps.com
+      email: ""
       website: https://clustrmaps.com
       opt_out_url: https://clustrmaps.com/bl/opt-out
       region: us
       category: people-search
       priority: high
+      notes: 'Address support@clustrmaps.com cleared on Sep 2, 2026: mail to it is permanently undeliverable. Bounce said: 550 88.1 Relay not permitted'
     - id: dataveria
       name: Dataveria
       email: support@dataveria.com
@@ -6552,12 +6554,13 @@ brokers:
       priority: high
     - id: rehold
       name: Rehold
-      email: removals-rehold@rehold.com
+      email: ""
       website: https://rehold.com
       opt_out_url: https://rehold.com/control/privacy
       region: us
       category: people-search
       priority: high
+      notes: 'Address removals-rehold@rehold.com cleared on Sep 2, 2026: mail to it is permanently undeliverable. Bounce said: ** Address not found **'
     - id: propertyrecs
       name: PropertyRecs
       email: privacy@propertyrecs.com
@@ -6568,12 +6571,13 @@ brokers:
       priority: high
     - id: checkthem
       name: CheckThem
-      email: support@checkthem.com
+      email: ""
       website: https://checkthem.com
       opt_out_url: https://www.checkthem.com/optout/
       region: us
       category: people-search
       priority: high
+      notes: 'Address support@checkthem.com cleared on Sep 2, 2026: mail to it is permanently undeliverable. Bounce said: ** Address not found **'
     - id: findpeoplesearch
       name: FindPeopleSearch
       email: support@findpeoplesearch.com
