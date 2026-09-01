@@ -257,9 +257,15 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 	// Classify and store each email
 	var success, formRequired, confirmRequired, rejected, disclosure, unknown int
 	var processed []inbox.Email // Track which emails were processed, for archiving
+	// Addresses this scan proved permanently undeliverable, applied to the
+	// broker list once the loop is done (see applyBounceFindings).
+	var bounces []bounceFinding
 	for _, email := range emails {
 		classified := inbox.ClassifyResponse(&email)
 		processed = append(processed, email)
+		if f, ok := collectBounce(classified); ok {
+			bounces = append(bounces, f)
+		}
 
 		// Get body content (prefer plain text, fall back to HTML)
 		bodyContent := email.Body
@@ -328,6 +334,11 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Prune addresses this scan proved dead. Done before archiving so a
+	// failure to move mail can't cost us the finding, and before the summary
+	// so it can report what changed.
+	clearedAddresses := s.applyBounceFindings(bounces)
+
 	// Auto-archive processed emails to the Eraser folder.
 	//
 	// Grouped by the mailbox each was fetched from: this list mixes INBOX,
@@ -371,12 +382,13 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 				<div>Data disclosures: <span class="font-semibold">%d</span></div>
 				<div>Unknown: <span class="font-semibold">%d</span></div>
 			</div>
+			%s
 			<p class="mt-2 text-sm">
 				<a href="/tasks" class="underline font-medium">View pending tasks</a> |
 				<a href="/pipeline" class="underline" onclick="window.location.reload()">Refresh page</a>
 			</p>
 		</div>
-	`, len(emails), success, formRequired, confirmRequired, rejected, disclosure, unknown)
+	`, len(emails), success, formRequired, confirmRequired, rejected, disclosure, unknown, bounceSummaryHTML(clearedAddresses))
 }
 
 // handleAPIInboxRescan rescans all emails and reclassifies them with the improved classifier
@@ -458,8 +470,12 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 	// Classify and store/update each email
 	var success, formRequired, confirmRequired, rejected, pending, disclosure, unknown int
 	var updated, inserted int
+	var bounces []bounceFinding
 	for _, email := range emails {
 		classified := inbox.ClassifyResponse(&email)
+		if f, ok := collectBounce(classified); ok {
+			bounces = append(bounces, f)
+		}
 
 		// Get body content (prefer plain text, fall back to HTML)
 		bodyContent := email.Body
@@ -550,6 +566,8 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	clearedAddresses := s.applyBounceFindings(bounces)
+
 	// Return summary HTML
 	_, _ = fmt.Fprintf(w, `
 		<div class="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded">
@@ -567,12 +585,13 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 				<div>Data disclosures: <span class="font-semibold">%d</span></div>
 				<div>Unknown: <span class="font-semibold">%d</span></div>
 			</div>
+			%s
 			<p class="mt-2 text-sm">
 				<a href="/tasks" class="underline font-medium">View action items</a> |
 				<a href="/pipeline" class="underline" onclick="window.location.reload()">Refresh page</a>
 			</p>
 		</div>
-	`, len(emails), updated, inserted, success, formRequired, confirmRequired, pending, rejected, disclosure, unknown)
+	`, len(emails), updated, inserted, success, formRequired, confirmRequired, pending, rejected, disclosure, unknown, bounceSummaryHTML(clearedAddresses))
 }
 
 // handleAPIReclassify reclassifies all existing database records using subject-only patterns

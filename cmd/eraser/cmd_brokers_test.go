@@ -53,8 +53,10 @@ func TestRunTagBroker(t *testing.T) {
 	if strings.TrimSpace(b.Notes) == "" {
 		t.Error("tag added without --note should auto-fill Notes so the decision stays auditable")
 	}
-	if b.Sendable() {
-		t.Error("tagged broker is still Sendable()")
+	// us-data-only classifies without blocking: a US user must still be able
+	// to write to a company that only holds US data.
+	if !b.Sendable() {
+		t.Error("us-data-only must not take the broker out of the send list")
 	}
 	if _, err := os.Stat(path + ".bak"); err != nil {
 		t.Errorf("backup file not written: %v", err)

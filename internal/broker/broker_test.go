@@ -300,7 +300,10 @@ func TestSendableGate(t *testing.T) {
 		{"no address", Broker{ID: "b"}, false, "No email on file"},
 		{"b2b-only outranks a valid address", Broker{ID: "c", Email: "privacy@c.example", Tags: []string{TagB2BOnly}}, false, "B2B only - holds no consumer data"},
 		{"form-only outranks a valid address", Broker{ID: "d", Email: "privacy@d.example", Tags: []string{TagFormOnly}}, false, "Accepts requests only through their web form"},
-		{"us-data-only outranks a valid address", Broker{ID: "g", Email: "privacy@g.example", Tags: []string{TagUSDataOnly}}, false, "Only holds data on US customers"},
+		// us-data-only is a scope note, not a refusal: it must never take a
+		// broker out of anyone's send list, least of all a US user's.
+		{"us-data-only does not block a send", Broker{ID: "g", Email: "privacy@g.example", Tags: []string{TagUSDataOnly}}, true, ""},
+		{"us-data-only alongside b2b-only is still blocked by b2b-only", Broker{ID: "h", Email: "privacy@h.example", Tags: []string{TagUSDataOnly, TagB2BOnly}}, false, "B2B only - holds no consumer data"},
 		{"tag matching is case-insensitive", Broker{ID: "e", Email: "privacy@e.example", Tags: []string{"B2B-Only"}}, false, "B2B only - holds no consumer data"},
 		{"unrelated tags don't block a send", Broker{ID: "f", Email: "privacy@f.example", Tags: []string{"verified-2026"}}, true, ""},
 	}
@@ -569,5 +572,81 @@ func TestSaveIsAtomic(t *testing.T) {
 	}
 	if len(reloaded.Brokers) != 1 {
 		t.Errorf("reloaded %d brokers, want 1", len(reloaded.Brokers))
+	}
+}
+
+// TestMarkEmailUnreachable pins the rules the automatic bounce cleanup
+// depends on: only the address that actually bounced is cleared, the broker
+// itself survives with an audit note, and a stale bounce for an address the
+// broker no longer uses changes nothing.
+func TestMarkEmailUnreachable(t *testing.T) {
+	t.Run("clears the address and records why", func(t *testing.T) {
+		b := Broker{ID: "acme", Name: "Acme", Email: "privacy@acme.example"}
+		if !MarkEmailUnreachable(&b, "PRIVACY@acme.example", "550 5.1.1 User unknown") {
+			t.Fatal("MarkEmailUnreachable reported no change for the current address")
+		}
+		if b.Email != "" {
+			t.Errorf("Email = %q, want it cleared", b.Email)
+		}
+		if !strings.Contains(b.Notes, "privacy@acme.example") {
+			t.Errorf("Notes = %q, want the dropped address recorded", b.Notes)
+		}
+		if !strings.Contains(b.Notes, "User unknown") {
+			t.Errorf("Notes = %q, want the bounce evidence recorded", b.Notes)
+		}
+		if b.ID == "" || b.Name == "" {
+			t.Error("the broker entry itself must survive losing its address")
+		}
+	})
+
+	t.Run("keeps an existing note", func(t *testing.T) {
+		b := Broker{ID: "acme", Email: "privacy@acme.example", Notes: "Form-only per their reply."}
+		MarkEmailUnreachable(&b, "privacy@acme.example", "")
+		if !strings.HasPrefix(b.Notes, "Form-only per their reply.") {
+			t.Errorf("Notes = %q, want the existing note kept", b.Notes)
+		}
+	})
+
+	t.Run("a bounce for a different address is ignored", func(t *testing.T) {
+		b := Broker{ID: "acme", Email: "privacy@acme.example"}
+		if MarkEmailUnreachable(&b, "old-address@acme.example", "") {
+			t.Error("cleared the current address on a bounce for a different one")
+		}
+		if b.Email != "privacy@acme.example" {
+			t.Errorf("Email = %q, want it untouched", b.Email)
+		}
+	})
+
+	t.Run("no address and no broker are no-ops", func(t *testing.T) {
+		b := Broker{ID: "acme"}
+		if MarkEmailUnreachable(&b, "", "") || MarkEmailUnreachable(&b, "anything@acme.example", "") {
+			t.Error("reported a change for a broker that has no address")
+		}
+		if MarkEmailUnreachable(nil, "privacy@acme.example", "") {
+			t.Error("reported a change for a nil broker")
+		}
+	})
+}
+
+// TestWelcomeIdentityResolverIDsExist keeps the landing page honest: every
+// company it names as an identity resolver has to still be in the shipped
+// database under that ID, or the page quietly drops a row that the copy
+// above it promises is there. IDs are pinned by
+// TestShippedBrokerDatabaseIDsAreStable, so this only breaks on a
+// deliberate retirement - at which point the landing page needs editing too.
+func TestWelcomeIdentityResolverIDsExist(t *testing.T) {
+	db, err := LoadFromFile("../../data/brokers.yaml")
+	if err != nil {
+		t.Fatalf("load shipped brokers: %v", err)
+	}
+	// Kept in sync by hand with identityResolvers in internal/web/welcome.go
+	// (importing it here would be an import cycle: web already imports broker).
+	for _, id := range []string{
+		"liveramp", "acxiom", "epsilon", "experian-marketing", "transunion-marketing",
+		"tapad", "merkle", "lotame", "id5-technology", "zeotap-gmbh", "nielsen",
+	} {
+		if db.FindByID(id) == nil {
+			t.Errorf("identity resolver %q named on the /welcome page is not in data/brokers.yaml", id)
+		}
 	}
 }

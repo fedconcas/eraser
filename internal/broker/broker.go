@@ -92,9 +92,12 @@ const (
 	// just one you action through OptOutURL, not SMTP.
 	TagFormOnly = "form-only"
 	// TagUSDataOnly marks a company that told us it only holds data on US
-	// customers. For this fork's EU user there is nothing of theirs to
-	// erase, so nothing to send - same disposition as b2b-only, different
-	// reason, kept distinct so the audit trail says which one it was.
+	// customers. Unlike the two above it is a SCOPE note, not a refusal:
+	// the company holds consumer data and answers erasure requests, just not
+	// for people outside the US. Most people running this tool are in the
+	// US, so it must never block a send - it is there to explain a "we have
+	// no record of you" reply to someone writing from the EU/UK, and to
+	// filter for. See Sendable().
 	TagUSDataOnly = "us-data-only"
 )
 
@@ -138,7 +141,12 @@ func (b Broker) Sendable() bool {
 	if strings.TrimSpace(b.Email) == "" {
 		return false
 	}
-	return !b.HasTag(TagB2BOnly) && !b.HasTag(TagFormOnly) && !b.HasTag(TagUSDataOnly)
+	// us-data-only is deliberately NOT a block. Most people using this tool
+	// are in the US, where "we only hold data on US customers" describes
+	// exactly the broker they most need to write to. The tag stays as a
+	// classification - it is shown on the row and filterable - but it never
+	// takes a broker out of anyone's send list.
+	return !b.HasTag(TagB2BOnly) && !b.HasTag(TagFormOnly)
 }
 
 // NotSendableReason explains a false Sendable() in words fit for a UI or a
@@ -147,8 +155,6 @@ func (b Broker) NotSendableReason() string {
 	switch {
 	case b.HasTag(TagB2BOnly):
 		return "B2B only - holds no consumer data"
-	case b.HasTag(TagUSDataOnly):
-		return "Only holds data on US customers"
 	case b.HasTag(TagFormOnly):
 		return "Accepts requests only through their web form"
 	case strings.TrimSpace(b.Email) == "":
@@ -228,6 +234,44 @@ func ApplyDisposition(b *Broker, tag string, remove bool, note, via string) (boo
 		b.Notes = fmt.Sprintf("Tagged %s via %s on %s.", tag, via, time.Now().Format("Jan 2, 2006"))
 	}
 	return true, nil
+}
+
+// MarkEmailUnreachable clears b's contact address after it was proven
+// undeliverable, recording what happened in Notes. Returns whether anything
+// changed - a broker whose address has already been cleared, or whose
+// current address is not the one that bounced, is left alone.
+//
+// The broker itself is deliberately kept: an entry with no address still
+// carries the company's name, category, website and opt-out URL, still shows
+// up under "Include non-sendable" and in list-brokers --missing-email, and
+// can be given a working address later. Deleting the row would throw all of
+// that away and silently shrink the shipped database.
+//
+// evidence is the wording from the bounce notification; it goes into Notes
+// so a future reader can tell an automatic clear from a hand edit, and can
+// see which address was dropped.
+func MarkEmailUnreachable(b *Broker, addr, evidence string) bool {
+	if b == nil {
+		return false
+	}
+	addr = strings.ToLower(strings.TrimSpace(addr))
+	current := strings.ToLower(strings.TrimSpace(b.Email))
+	if addr == "" || current == "" || current != addr {
+		return false
+	}
+
+	b.Email = ""
+	note := fmt.Sprintf("Address %s cleared on %s: mail to it is permanently undeliverable.",
+		addr, time.Now().Format("Jan 2, 2006"))
+	if evidence = strings.TrimSpace(evidence); evidence != "" {
+		note += " Bounce said: " + evidence
+	}
+	if strings.TrimSpace(b.Notes) == "" {
+		b.Notes = note
+	} else {
+		b.Notes = strings.TrimSpace(b.Notes) + " " + note
+	}
+	return true
 }
 
 // Sendable filters list down to the brokers an email may actually go to.

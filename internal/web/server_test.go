@@ -517,3 +517,38 @@ func TestSendAllSelectionCannotBypassGates(t *testing.T) {
 		t.Errorf("selection resolved to %v, want only [ok-one]; a posted ID must not reach an excluded, address-less, b2b-only or form-only broker", got)
 	}
 }
+
+// TestWelcomePageRenders covers the landing tab end to end: it renders, it
+// names both audiences, and its identity-resolver table is built from the
+// loaded broker database rather than hard-coded prose - a company retired
+// from brokers.yaml must drop off the page instead of linking nowhere.
+func TestWelcomePageRenders(t *testing.T) {
+	s := newTestServer(t, testConfig())
+	s.setBrokersForTest([]broker.Broker{
+		{ID: "liveramp", Name: "LiveRamp", Email: "privacy@liveramp.example", OptOutURL: "https://liveramp.example/opt_out/", Region: "global", Category: "marketing"},
+		{ID: "spokeo", Name: "Spokeo", Email: "privacy@spokeo.example", Region: "us", Category: "people-search"},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/welcome", nil)
+	w := httptest.NewRecorder()
+	s.handleWelcome(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /welcome = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	for _, want := range []string{"Start here", "EU or the UK", "United States", "LiveRamp", "https://liveramp.example/opt_out/"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("welcome page is missing %q", want)
+		}
+	}
+	// Curated but absent companies must not appear: the row comes from the
+	// database, not the curated list.
+	if strings.Contains(body, "Acxiom") {
+		t.Error("welcome page rendered a company that is not in the loaded broker database")
+	}
+	// A plain broker is not an identity resolver and has no row here.
+	if strings.Contains(body, "Spokeo") {
+		t.Error("welcome page listed a broker that is not one of the curated identity resolvers")
+	}
+}

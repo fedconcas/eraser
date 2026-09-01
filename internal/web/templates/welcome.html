@@ -1,0 +1,163 @@
+{{define "content"}}
+<div class="fade-in-up">
+
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <h1 class="font-display text-3xl font-bold text-primary">Start here</h1>
+            <span class="text-xs font-medium px-2 py-1 rounded-full" style="background: var(--accent-muted); color: var(--accent);">Draft copy</span>
+        </div>
+        <p class="text-secondary max-w-3xl">
+            This tool writes to data brokers on your behalf and tracks what comes back.
+            Which law you are exercising - and, more importantly, <em>which companies are worth
+            writing to first</em> - depends on where you live. Read the section that applies to you.
+        </p>
+    </div>
+
+    <!-- The two audiences -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+        <!-- EU / UK -->
+        <div class="card p-6">
+            <h2 class="font-display text-xl font-semibold text-primary mb-1">If you are in the EU or the UK</h2>
+            <p class="text-sm text-muted mb-4">GDPR Article 17 &middot; UK GDPR</p>
+
+            <p class="text-secondary mb-4">
+                Your position is the strong one. Erasure is a right, not a favour: the request is free,
+                the company has one month to answer, and "we would rather not" is not an answer. Every
+                request this tool sends on your behalf cites that right explicitly.
+            </p>
+            <p class="text-secondary mb-4">
+                The catch is that most of these companies probably hold no file with your name on it.
+                What circulates about you is mostly <strong>hashed</strong> - your email address run through
+                a one-way function, then matched against advertising IDs, device graphs and household
+                clusters. Nobody in that chain needs to know you are you; they only need the same hash to
+                keep turning up.
+            </p>
+            <p class="text-secondary">
+                That is why a letter to every marketing company in the list is not the best first move.
+                The hashes are only useful because a <strong>small number of companies do the joining</strong>.
+                Start with them - the list below - and you cut off far more than you would by writing to a
+                hundred companies that never knew your name.
+            </p>
+        </div>
+
+        <!-- USA -->
+        <div class="card p-6">
+            <h2 class="font-display text-xl font-semibold text-primary mb-1">If you are in the United States</h2>
+            <p class="text-sm text-muted mb-4">State privacy laws &middot; CCPA/CPRA &middot; FCRA</p>
+
+            <p class="text-secondary mb-4">
+                There is no single federal right to erasure. What you have instead is a growing patchwork of
+                <strong>state</strong> laws - California, Colorado, Connecticut, Virginia, Texas, Oregon and
+                more each year - most of which give residents the right to have personal data deleted and to
+                opt out of its sale or sharing. California residents have the strongest version, and its
+                registry of data brokers is the reason so many of the companies in this tool are listed at all.
+            </p>
+            <p class="text-secondary mb-4">
+                The difference from Europe is that here these companies very likely <em>do</em> hold a file on
+                you by name: address history, household composition, income bracket, purchase behaviour,
+                inferred interests. The people-search sites that publish your address are the most visible
+                end of it, and the ones most worth clearing first.
+            </p>
+            <p class="text-secondary">
+                Two things a deletion request will <em>not</em> do: it will not erase your credit file at
+                Experian, Equifax or TransUnion (that is governed separately by the FCRA - you can opt out of
+                prescreened offers, but the file itself stays), and it will not stop the hash-matching described
+                on the left. For that, the same list below applies to you too.
+            </p>
+        </div>
+    </div>
+
+    <!-- Identity resolvers -->
+    <div class="card p-6 mb-8">
+        <h2 class="font-display text-xl font-semibold text-primary mb-1">The companies that do the joining</h2>
+        <p class="text-secondary mb-5 max-w-3xl">
+            These are the identity-resolution firms: the ones that turn a hashed email into a durable ID and
+            match it across sites, apps, devices and TVs. There are not many of them, which is exactly what
+            makes them worth your first requests - wherever you live.
+        </p>
+
+        {{if .Resolvers}}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-muted border-b" style="border-color: var(--border);">
+                        <th class="py-2 pr-4 font-medium">Company</th>
+                        <th class="py-2 pr-4 font-medium">What they do</th>
+                        <th class="py-2 font-medium">Direct opt-out</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Resolvers}}
+                    <tr class="border-b" style="border-color: var(--border);">
+                        <td class="py-3 pr-4 align-top whitespace-nowrap">
+                            <a href="/brokers?search={{.Name}}" class="font-medium text-primary hover:underline">{{.Name}}</a>
+                        </td>
+                        <td class="py-3 pr-4 align-top text-secondary">{{.Role}}</td>
+                        <td class="py-3 align-top">
+                            {{if .OptOutURL}}
+                            <a href="{{.OptOutURL}}" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] hover:underline">Their form &rarr;</a>
+                            {{else if .Email}}
+                            <span class="text-muted">By email</span>
+                            {{else}}
+                            <span class="text-muted">&mdash;</span>
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        <p class="text-sm text-muted mt-4">
+            Each name links into your broker list, where you can send the request from here.
+            Where a company runs its own opt-out form, using it as well is worth the two minutes:
+            a form submission and a legal request are handled by different teams inside these companies.
+        </p>
+        {{else}}
+        <p class="text-secondary">No identity-resolution companies are present in the loaded broker database.</p>
+        {{end}}
+    </div>
+
+    <!-- Context -->
+    <div class="card p-6 mb-8">
+        <h2 class="font-display text-xl font-semibold text-primary mb-4">Where the law currently stands</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-secondary">
+            <div>
+                <h3 class="font-medium text-primary mb-2">Consent strings are personal data</h3>
+                <p>
+                    In 2022 the Belgian data protection authority found IAB Europe's Transparency and Consent
+                    Framework - the consent pop-up standard behind most of the ad industry - in breach of the
+                    GDPR, holding that the "TC String" recording your choices is itself personal data and that
+                    IAB Europe acts as a joint controller for it. An action plan was approved in 2023; appeals
+                    have run alongside it. The practical point for you: consent captured through those banners
+                    is contested ground, not settled permission.
+                </p>
+            </div>
+            <div>
+                <h3 class="font-medium text-primary mb-2">"Legitimate interest" is allowed, but not unlimited</h3>
+                <p>
+                    In February 2023 a UK tribunal largely overturned the ICO's enforcement notice against
+                    Experian, accepting that legitimate interest can be a lawful basis for direct marketing. It
+                    also rejected Experian's argument that telling millions of people their data was being
+                    processed was too expensive to be proportionate - cost is not a defence against the duty to
+                    inform. Both halves matter when a company answers your request by citing legitimate interest.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Next step -->
+    <div class="card p-6">
+        <h2 class="font-display text-xl font-semibold text-primary mb-3">What to do next</h2>
+        <ol class="text-secondary space-y-2 list-decimal list-inside">
+            <li>Set up your profile and mailbox in <a href="/settings" class="text-[var(--accent)] hover:underline">Settings</a>, so requests go out as you and replies can be read back.</li>
+            <li>Open <a href="/brokers" class="text-[var(--accent)] hover:underline">Brokers</a> and start with the companies above, then work down by priority.</li>
+            <li>Let the inbox scan run on the <a href="/pipeline" class="text-[var(--accent)] hover:underline">Pipeline</a> page. It classifies replies, surfaces the ones needing a form or a confirmation click, and quietly drops addresses that turn out to be dead.</li>
+        </ol>
+    </div>
+
+</div>
+{{end}}
+
+{{template "layout" .}}

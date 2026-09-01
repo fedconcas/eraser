@@ -508,6 +508,9 @@ func (s *Server) setupRouter() *chi.Mux {
 
 	// Routes
 	r.Get("/", s.handleDashboard)
+	// The landing tab: which law you are actually exercising, and which
+	// companies are worth writing to first, depending on where you live.
+	r.Get("/welcome", s.handleWelcome)
 	r.Get("/brokers", s.handleBrokers)
 	r.Get("/history", s.handleHistory)
 	r.Get("/settings", s.handleSettings)

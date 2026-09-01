@@ -37,7 +37,9 @@ Worth knowing before touching related code:
 
 ## Broker disposition tags and the send gate
 
-`broker.Broker.Tags` carries a closed vocabulary of *disposition* tags recording what a broker told us: `b2b-only` (holds no consumer data at all), `us-data-only` (only holds data on US customers) and `form-only` (holds consumer data but refuses email, use `opt_out_url`). See `broker.DispositionTags`.
+`broker.Broker.Tags` carries a closed vocabulary of *disposition* tags recording what a broker told us: `b2b-only` (holds no consumer data at all), `form-only` (holds consumer data but refuses email, use `opt_out_url`) and `us-data-only` (only holds data on US customers). See `broker.DispositionTags`.
+
+**Only the first two block a send.** `us-data-only` records *scope*, not refusal: the company does hold consumer data and does answer erasure requests, it just holds nothing on people outside the US. Most people running this tool are in the US, so blocking on that tag would hide exactly the brokers they most need - it would also be the only tag that means something different depending on who is reading it. It stays visible on the row and filterable (`list-brokers --tag us-data-only`, the disposition dropdown), and it is the right thing to record when an EU/UK user gets a "we hold no record of you" reply, so the next person can see why. `Sendable()` is the single place that distinction lives.
 
 Tags are applied through two doors that share the same rules: `eraser tag-broker <id> <tag>` (with `--remove`/`--note`) and the web UI's per-row Tag select (`POST /api/brokers/{id}/tag`). Both go through `broker.ApplyDisposition`, which is where those rules live: it rejects unknown tags with a hard error, applies the add/remove, and auto-fills `Notes` when the broker has none (a tagged broker must say why - the shipped data file is tested for it), and `cmd_monitor.go`'s b2b_only output points at the exact `tag-broker` invocation rather than a hand edit. The evidence for a tag comes from `eraser audit-brokers`: website/MX liveness checks for defunctness, `--history` for replies already classified b2b_only, and `--replies` to export stored reply bodies for offline review.
 
@@ -63,6 +65,17 @@ Adding another filter to the brokers page means adding the control **inside `<di
 The "Emailable in this view" counter lives in the page header, *outside* the `#broker-list` fragment - but tag, exclude and filter actions all change it. Every fragment render of `partials/broker-list.html` therefore passes `SendableCount` plus `OutOfBand: true`, and the partial emits a top-level `<span id="sendable-count" hx-swap-oob>` that htmx swaps into the header. The guard matters: a full-page render must not emit the span (it would show as a stray number in the list). If you add another fragment render of that partial, pass both values or the counter goes stale.
 
 A disposition tag is an assertion about the *company*, not about one user's results. "They told us they are B2B-only" belongs in `brokers.yaml`; "they had no record of me" is per-user and belongs in `history.db`. `internal/inbox/classifier.go` keeps these apart: `ResponseB2BOnly` is scored separately from `ResponseRejected` precisely because "no record of you" is the normal output of a working erasure campaign and must never tag a live broker as dead.
+
+## The broker list heals itself from bounces
+
+An inbox scan (`handleAPIInboxScan`, and the full `handleAPIInboxRescan`) now clears a broker's address when it proves undeliverable, so a stale address stops costing every future send a silent failure - no `cleanup-bounces` run, and no wait for a new release of the shipped data file. `internal/web/bounces.go` holds the whole path: `collectBounce` filters the scan's classified replies, `applyBounceFindings` applies the batch in ONE `mutateBrokers` call (one file write, one published snapshot per scan), and `bounceSummaryHTML` reports it in the scan summary.
+
+Two gates have to agree before an address is touched, and the asymmetry is deliberate:
+
+1. `ClassifyResponse` says `ResponseBounced` - this is a delivery failure at all.
+2. `inbox.IsHardBounce` says the failure is *permanent*: a 5.x.x enhanced status code, a 5xx reply code, or wording naming the recipient as unknown - **and no transient signal anywhere in the message**. A full mailbox, a greylisting deferral or a "will retry" veto the verdict outright, because clearing a live broker's address on a temporary failure would drop it out of every future send with nothing to put it back.
+
+The broker itself is never deleted - `broker.MarkEmailUnreachable` clears `email` and records the dropped address and the bounce wording in `Notes`. The entry keeps its name, category, website and `opt_out_url`, still appears under "Include non-sendable" and in `list-brokers --missing-email`, and can be given a working address later. (Note `cleanup-bounces --remove` on the CLI still *deletes* the whole entry via `RemoveByEmail` - the older, blunter behaviour. Worth reconciling.)
 
 ## Broker IDs are join keys into history.db
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/eraser-privacy/eraser/internal/broker"
 	"github.com/eraser-privacy/eraser/internal/config"
+	"github.com/eraser-privacy/eraser/internal/inbox"
 )
 
 // writeTestBrokerFile seeds a minimal brokers.yaml for the persistence tests
@@ -77,8 +78,10 @@ func TestHandleAPITagBrokerPersists(t *testing.T) {
 	if !b.HasTag(broker.TagUSDataOnly) {
 		t.Errorf("in-memory broker not tagged: %+v", b)
 	}
-	if b.Sendable() {
-		t.Error("tagged broker still passes Sendable()")
+	// us-data-only records scope, it does not retire the broker: the row
+	// must stay sendable (and stay in the default view).
+	if !b.Sendable() {
+		t.Error("us-data-only took the broker out of the send list")
 	}
 	if strings.TrimSpace(b.Notes) == "" {
 		t.Error("tagging a broker with empty Notes must fill in the audit note")
@@ -235,18 +238,21 @@ func TestBrokersPageDefaultsToSendableOnly(t *testing.T) {
 		{ID: "no-address", Name: "No Address", Email: "", Region: "us", Category: "people-search"},
 	})
 
+	// us-only-co is tagged but still emailable, so the default view holds
+	// both it and the untagged broker - only the b2b-only company and the
+	// one with no address are hidden.
 	got := s.getBrokersWithStatus("default", brokerQuery{})
-	if len(got) != 1 || got[0].ID != "spokeo" {
-		var ids []string
-		for _, b := range got {
-			ids = append(ids, b.ID)
-		}
-		t.Fatalf("default view = %v, want only [spokeo]", ids)
+	var ids []string
+	for _, b := range got {
+		ids = append(ids, b.ID)
+	}
+	if len(got) != 2 || ids[0] != "spokeo" || ids[1] != "us-only-co" {
+		t.Fatalf("default view = %v, want [spokeo us-only-co]", ids)
 	}
 
 	got = s.getBrokersWithStatus("default", brokerQuery{NonSendable: true})
 	if len(got) != 4 {
-		var ids []string
+		ids = nil
 		for _, b := range got {
 			ids = append(ids, b.ID)
 		}
@@ -373,5 +379,82 @@ func TestMutateBrokersKeepsOutOfProcessEdits(t *testing.T) {
 	}
 	if b := reloaded.FindByID("demandscience"); b == nil || !b.HasTag(broker.TagUSDataOnly) {
 		t.Errorf("the web write itself did not persist: %+v", b)
+	}
+}
+
+// TestApplyBounceFindingsClearsDeadAddresses covers the self-healing list:
+// a hard bounce seen during an inbox scan clears that broker's address (and
+// persists it), a soft bounce leaves it alone, and the broker itself is
+// never deleted.
+func TestApplyBounceFindingsClearsDeadAddresses(t *testing.T) {
+	brokerPath := writeTestBrokerFile(t)
+	s := newTestServerWithBrokerFile(t, testConfig(), brokerPath)
+
+	// Both are the shape a real NDR arrives in: from the local mail system,
+	// not from the broker. Only the first says the address is permanently
+	// dead.
+	hard := &inbox.Email{
+		From:    "mailer-daemon@googlemail.com",
+		Subject: "Undeliverable: Erasure request",
+		Body:    "Delivery to the following recipient failed permanently:\n550 5.1.1 <privacy@spokeo.com>: Recipient address rejected: User unknown",
+	}
+	soft := &inbox.Email{
+		From:    "mailer-daemon@googlemail.com",
+		Subject: "Undeliverable: Erasure request",
+		Body:    "Delivery to privacy@demandscience.example has failed: 452 4.2.2 The recipient's mailbox is full, the server will retry.",
+	}
+
+	var findings []bounceFinding
+	for _, e := range []*inbox.Email{hard, soft} {
+		classified := inbox.ClassifyResponse(e)
+		if classified.Type != inbox.ResponseBounced {
+			t.Fatalf("test fixture %q did not classify as a bounce: %s", e.Subject, classified.Type)
+		}
+		if f, ok := collectBounce(classified); ok {
+			findings = append(findings, f)
+		}
+	}
+
+	if len(findings) != 1 || findings[0].Address != "privacy@spokeo.com" {
+		t.Fatalf("collectBounce findings = %+v, want only the hard bounce for privacy@spokeo.com", findings)
+	}
+
+	cleared := s.applyBounceFindings(findings)
+	if len(cleared) != 1 || cleared[0] != "Spokeo" {
+		t.Fatalf("cleared = %v, want [Spokeo]", cleared)
+	}
+
+	b := s.getBrokerDB().FindByID("spokeo")
+	if b == nil {
+		t.Fatal("the broker was removed instead of having its address cleared")
+	}
+	if b.Email != "" {
+		t.Errorf("in-memory address = %q, want cleared", b.Email)
+	}
+	if b.Sendable() {
+		t.Error("a broker with no address must not be sendable")
+	}
+
+	// The soft-bounced broker keeps its address.
+	if other := s.getBrokerDB().FindByID("demandscience"); other == nil || other.Email == "" {
+		t.Errorf("a soft bounce cost a live broker its address: %+v", other)
+	}
+
+	// Persisted, so the next run of the app starts from the healed list.
+	db, err := broker.LoadFromFile(brokerPath)
+	if err != nil {
+		t.Fatalf("reload brokers file: %v", err)
+	}
+	reloaded := db.FindByID("spokeo")
+	if reloaded == nil || reloaded.Email != "" {
+		t.Errorf("brokers.yaml on disk still carries the dead address: %+v", reloaded)
+	}
+	if !strings.Contains(reloaded.Notes, "privacy@spokeo.com") {
+		t.Errorf("Notes = %q, want the dropped address recorded for the audit trail", reloaded.Notes)
+	}
+
+	// Re-applying the same finding is a no-op, not a second write.
+	if again := s.applyBounceFindings(findings); len(again) != 0 {
+		t.Errorf("re-applying a handled bounce reported %v, want nothing", again)
 	}
 }
