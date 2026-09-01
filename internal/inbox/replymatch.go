@@ -122,16 +122,26 @@ func UnattributedName(brokerID string) string {
 // The guards run before anything else and are the reason this can't undo the
 // sender-domain filtering:
 //
-//   - a general-purpose sender domain is never a broker reply, subject or no
-//     subject. This is what stops our own request - which quotes the subject
-//     perfectly and comes from the user's own free-mail address - from being
-//     read as a reply to itself.
+//   - a general-purpose sender domain is never a broker reply, whatever it
+//     claims. This is what stops our own request - sent from the user's own
+//     free-mail address - from being read as a reply to itself.
 //   - our own address is never a reply to us, whatever domain it's on. The
 //     monitored folder is configurable and may include sent mail.
 //   - a bounce is not a reply. Delivery reports quote the original subject, and
 //     `eraser cleanup-bounces` reads them out of the inbox to correct dead
 //     broker addresses; classifying them here would file them away and
 //     silently break that.
+//
+// The request subject is only load-bearing for rule 4 and the final
+// unattributed fallback, not for rules 2-3. A ticketing platform rewrites the
+// subject on most of the messages a ticket produces - a satisfaction survey,
+// "ticket updated", a follow-up - and quotes it faithfully only on the very
+// first auto-acknowledgement, if that. Gating the helpdesk-tenant and
+// subdomain rules behind a subject match left them firing on close to nothing
+// against a live account: helpdesk tenant slug or contacted-domain-subdomain
+// is already exact, private-state evidence (an outsider can't know which
+// brokers this install wrote to), same strength as rule 1's domain match,
+// and needs no corroboration from subject text.
 func (m *Monitor) matchReply(email *Email) ReplyMatch {
 	// Rule 1: sender domain resolves to a broker, as before.
 	if email.FromDomain != "" {
@@ -142,9 +152,6 @@ func (m *Monitor) matchReply(email *Email) ReplyMatch {
 		}
 	}
 
-	if !m.subjectLooksLikeOurRequest(email.Subject) {
-		return ReplyMatch{}
-	}
 	if email.FromDomain == "" || unmatchableDomains[email.FromDomain] {
 		return ReplyMatch{}
 	}
@@ -175,6 +182,10 @@ func (m *Monitor) matchReply(email *Email) ReplyMatch {
 		}
 	}
 
+	if !m.subjectLooksLikeOurRequest(email.Subject) {
+		return ReplyMatch{}
+	}
+
 	// Rule 4, last resort: an address we wrote to, quoted in the reply body.
 	//
 	// Ranked last rather than first, against the intuition that a reply
@@ -187,7 +198,10 @@ func (m *Monitor) matchReply(email *Email) ReplyMatch {
 	// would have mis-attributed a reply the tenant rule gets right.
 	//
 	// Hence both the position and the uniqueness requirement below: a body
-	// naming several brokers we've written to identifies none of them.
+	// naming several brokers we've written to identifies none of them. Gated
+	// on the subject match, unlike rules 2-3: an address sitting in body text
+	// is weaker, attacker-reachable evidence, so it needs the subject as
+	// corroboration that this is genuinely shaped like a reply to us.
 	if id, ok := m.brokerFromQuotedAddress(email); ok {
 		return ReplyMatch{BrokerID: id, Attributed: true, Via: "quoted request address"}
 	}
