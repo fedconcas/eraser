@@ -5,7 +5,6 @@
     <div class="mb-8">
         <div class="flex items-center gap-3 mb-2">
             <h1 class="font-display text-3xl font-bold text-primary">Start here</h1>
-            <span class="text-xs font-medium px-2 py-1 rounded-full" style="background: var(--accent-muted); color: var(--accent);">Draft copy</span>
         </div>
         <p class="text-secondary max-w-3xl">
             This tool writes to data brokers on your behalf and tracks what comes back.
@@ -14,12 +13,50 @@
         </p>
     </div>
 
+    <!-- Next step -->
+    <div class="card p-6 mb-6">
+        <h2 class="font-display text-xl font-semibold text-primary mb-3">What to do next</h2>
+        <ol class="text-secondary space-y-2 list-decimal list-inside">
+            <li>Set up your profile and mailbox in <a href="/settings" class="text-[var(--accent)] hover:underline">Settings</a>, so requests go out as you and replies can be read back.</li>
+            <li>Open <a href="/brokers" class="text-[var(--accent)] hover:underline">Brokers</a> and start with the companies below, then work down by priority.</li>
+            <li>Let the inbox scan run on the <a href="/pipeline" class="text-[var(--accent)] hover:underline">Pipeline</a> page. It classifies replies, surfaces the ones needing a form or a confirmation click, and quietly drops addresses that turn out to be dead.</li>
+        </ol>
+    </div>
+
     <!-- The two audiences. Stacked rather than side by side: the EU/UK half
          carries the case-law notes that belong to it, so the two are not the
          same height and never will be. -->
 
-    <!-- EU / UK -->
+    <!-- USA -->
     <div class="card p-6 mb-6">
+        <h2 class="font-display text-xl font-semibold text-primary mb-1">If you are in the United States</h2>
+        <p class="text-sm text-muted mb-4">State privacy laws &middot; CCPA/CPRA &middot; FCRA</p>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
+            <p class="text-secondary">
+                There is no single federal right to erasure. What you have instead is a growing patchwork of
+                <strong>state</strong> laws - California, Colorado, Connecticut, Virginia, Texas, Oregon and
+                more each year - most of which give residents the right to have personal data deleted and to
+                opt out of its sale or sharing. California residents have the strongest version, and its
+                registry of data brokers is the reason so many of the companies in this tool are listed at all.
+            </p>
+            <p class="text-secondary">
+                The difference from Europe is that here these companies very likely <em>do</em> hold a file on
+                you by name: address history, household composition, income bracket, purchase behaviour,
+                inferred interests. The people-search sites that publish your address are the most visible
+                end of it, and the ones most worth clearing first.
+            </p>
+        </div>
+        <p class="text-secondary mt-4">
+            Two things a deletion request will <em>not</em> do: it will not erase your credit file at
+            Experian, Equifax or TransUnion (that is governed separately by the FCRA - you can opt out of
+            prescreened offers, but the file itself stays), and it will not stop the hash-matching described
+            below. For that, the same list below applies to you too.
+        </p>
+    </div>
+
+    <!-- EU / UK -->
+    <div class="card p-6 mb-8">
         <h2 class="font-display text-xl font-semibold text-primary mb-1">If you are in the EU or the UK</h2>
         <p class="text-sm text-muted mb-4">GDPR Article 17 &middot; UK GDPR</p>
 
@@ -73,34 +110,6 @@
         </div>
     </div>
 
-    <!-- USA -->
-    <div class="card p-6 mb-8">
-        <h2 class="font-display text-xl font-semibold text-primary mb-1">If you are in the United States</h2>
-        <p class="text-sm text-muted mb-4">State privacy laws &middot; CCPA/CPRA &middot; FCRA</p>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
-            <p class="text-secondary">
-                There is no single federal right to erasure. What you have instead is a growing patchwork of
-                <strong>state</strong> laws - California, Colorado, Connecticut, Virginia, Texas, Oregon and
-                more each year - most of which give residents the right to have personal data deleted and to
-                opt out of its sale or sharing. California residents have the strongest version, and its
-                registry of data brokers is the reason so many of the companies in this tool are listed at all.
-            </p>
-            <p class="text-secondary">
-                The difference from Europe is that here these companies very likely <em>do</em> hold a file on
-                you by name: address history, household composition, income bracket, purchase behaviour,
-                inferred interests. The people-search sites that publish your address are the most visible
-                end of it, and the ones most worth clearing first.
-            </p>
-        </div>
-        <p class="text-secondary mt-4">
-            Two things a deletion request will <em>not</em> do: it will not erase your credit file at
-            Experian, Equifax or TransUnion (that is governed separately by the FCRA - you can opt out of
-            prescreened offers, but the file itself stays), and it will not stop the hash-matching described
-            above. For that, the same list below applies to you too.
-        </p>
-    </div>
-
     <!-- Identity resolvers -->
     <div id="joiners" class="card p-6 mb-8">
         <h2 class="font-display text-xl font-semibold text-primary mb-1">The companies that do the joining</h2>
@@ -149,16 +158,6 @@
         {{else}}
         <p class="text-secondary">No identity-resolution companies are present in the loaded broker database.</p>
         {{end}}
-    </div>
-
-    <!-- Next step -->
-    <div class="card p-6">
-        <h2 class="font-display text-xl font-semibold text-primary mb-3">What to do next</h2>
-        <ol class="text-secondary space-y-2 list-decimal list-inside">
-            <li>Set up your profile and mailbox in <a href="/settings" class="text-[var(--accent)] hover:underline">Settings</a>, so requests go out as you and replies can be read back.</li>
-            <li>Open <a href="/brokers" class="text-[var(--accent)] hover:underline">Brokers</a> and start with the companies above, then work down by priority.</li>
-            <li>Let the inbox scan run on the <a href="/pipeline" class="text-[var(--accent)] hover:underline">Pipeline</a> page. It classifies replies, surfaces the ones needing a form or a confirmation click, and quietly drops addresses that turn out to be dead.</li>
-        </ol>
     </div>
 
 </div>

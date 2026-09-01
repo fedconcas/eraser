@@ -150,6 +150,12 @@ func NewMonitor(cfg config.InboxConfig, brokerList []broker.Broker) *Monitor {
 		if b.Website != "" && b.Email != "" {
 			addDomain(extractDomain(b.Website), b)
 		}
+		// Same guard for declared reply domains (see broker.Broker.ReplyDomains).
+		if b.Email != "" {
+			for _, d := range b.ReplyDomains {
+				addDomain(strings.ToLower(strings.TrimSpace(d)), b)
+			}
+		}
 	}
 
 	if len(skipped) > 0 {

@@ -317,6 +317,14 @@ type Broker struct {
 	Notes      string   `yaml:"notes,omitempty"`
 	RequiresID bool     `yaml:"requires_id,omitempty"` // If they require ID verification
 	Tags       []string `yaml:"tags,omitempty"`
+	// ReplyDomains are additional domains this broker is known to reply from,
+	// beyond Email's domain and Website's domain - a dedicated compliance/DSR
+	// domain that isn't a subdomain of either (e.g. LexisNexis Risk Solutions
+	// contacts from lexisnexis.com but its case-tracking system replies from
+	// lexisnexisrisk.com, a distinct registrable domain inbox.Monitor's
+	// subdomain rule can't reach). Used only for inbox reply matching; never
+	// sent to.
+	ReplyDomains []string `yaml:"reply_domains,omitempty"`
 }
 
 type BrokerDatabase struct {

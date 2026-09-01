@@ -181,6 +181,89 @@ func TestRealWorldHelpdeskReplies(t *testing.T) {
 	}
 }
 
+// TestReplyDomainCatchesADedicatedCaseTrackingDomain pins a live-account
+// miss: LexisNexis Risk Solutions is contacted at lexisnexis.com, but its
+// case-tracking system replies from lexisnexisrisk.com - a distinct
+// registrable domain, not a subdomain of lexisnexis.com and not a helpdesk
+// host, so no existing rule could see it. broker.Broker.ReplyDomains exists
+// for exactly this.
+func TestReplyDomainCatchesADedicatedCaseTrackingDomain(t *testing.T) {
+	brokers := []broker.Broker{
+		{
+			ID: "lexisnexis", Name: "LexisNexis Risk Solutions",
+			Email: "privacy.information.mgr@lexisnexis.com", Website: "https://risk.lexisnexis.com",
+			ReplyDomains: []string{"lexisnexisrisk.com"},
+		},
+	}
+	m := NewMonitor(config.InboxConfig{Email: "fedconcas@gmail.com"}, brokers)
+	m.SetContactedBrokers(map[string]bool{"lexisnexis": true})
+
+	got := parseFull(t, m, "dpo@lexisnexisrisk.com",
+		"Case 00142513: Request Acknowledgement - Further Information Required",
+		"We are processing your request.")
+
+	if !got.Attributed || got.BrokerID != "lexisnexis" {
+		t.Errorf("expected attribution to lexisnexis via its reply domain, got %q (attributed=%v, via=%s)",
+			got.BrokerID, got.Attributed, got.MatchedVia)
+	}
+
+	t.Run("gated on the contacted-broker check like every other domain rule", func(t *testing.T) {
+		m := NewMonitor(config.InboxConfig{Email: "fedconcas@gmail.com"}, brokers)
+		m.SetContactedBrokers(map[string]bool{}) // never contacted
+		got := parseFull(t, m, "dpo@lexisnexisrisk.com", "Case 00142513: Request Acknowledgement", "")
+		if got.BrokerID != "" {
+			t.Errorf("a reply domain must not bypass the contacted-broker gate, got %q", got.BrokerID)
+		}
+	})
+}
+
+// TestHelpdeskAndSubdomainMatchWithoutQuotingOurSubject pins the real-world
+// failure this fixes: a ticketing platform rewrites the subject on most of
+// the messages a ticket produces - a satisfaction survey, a "ticket updated"
+// notice, a canned acknowledgement - and quotes our request text on none of
+// them. Checked against a live account, rules 2 and 3 were firing on
+// approximately zero recognised replies because of this: the tenant/subdomain
+// match is exact, private-state evidence on its own and must not need a
+// subject match to fire.
+func TestHelpdeskAndSubdomainMatchWithoutQuotingOurSubject(t *testing.T) {
+	tests := []struct {
+		name       string
+		from       string
+		subject    string
+		wantBroker string
+	}{
+		{
+			name:       "zendesk satisfaction survey, no request subject anywhere",
+			from:       "support@discotechnology.zendesk.com",
+			subject:    "How would you rate the support you received?",
+			wantBroker: "disco-technology",
+		},
+		{
+			name:       "jira ticket-updated notice, no request subject anywhere",
+			from:       "jira@experian-marketing-services.atlassian.net",
+			subject:    "Your ticket has been updated",
+			wantBroker: "experian-marketing",
+		},
+		{
+			name:       "broker subdomain, subject bears no resemblance to our request",
+			from:       "privacyrequest@privacy.hubspot.com",
+			subject:    "Ticket #48213 closed",
+			wantBroker: "hubspot",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := liveMonitor(t)
+			got := parseFull(t, m, tt.from, tt.subject, "no useful body text")
+			if !got.Attributed || got.BrokerID != tt.wantBroker {
+				t.Errorf("expected attribution to %q, got %q (attributed=%v, via=%s)",
+					tt.wantBroker, got.BrokerID, got.Attributed, got.MatchedVia)
+			}
+		})
+	}
+}
+
 // Subject matching must not become a way around the sender filtering that was
 // added to stop ordinary mail being classified as broker replies.
 func TestSubjectMatchingDoesNotBypassSenderGuards(t *testing.T) {
