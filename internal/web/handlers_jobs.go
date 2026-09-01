@@ -60,9 +60,10 @@ func (s *Server) resumePendingJob(state *PersistentJobState) {
 
 	// Build broker list from remaining IDs
 	brokerMap := make(map[string]broker.Broker)
-	for _, b := range s.brokerDB.Brokers {
+	for _, b := range s.getBrokerDB().Brokers {
 		brokerMap[b.ID] = b
 	}
+	excludedBrokers, _ := s.excludedBrokerSets()
 
 	var toSend []BrokerWithStatus
 	for _, id := range state.RemainingBrokers {
@@ -73,8 +74,13 @@ func (s *Server) resumePendingJob(state *PersistentJobState) {
 			// empty To: - and, worse, a job persisted before a broker was
 			// tagged b2b-only/form-only would resume into emailing a party
 			// that has already told us not to. This path auto-runs at
-			// startup (checkPendingJob), so nothing else gets a say.
+			// startup (checkPendingJob), so nothing else gets a say. The
+			// exclusion check covers the same race for a broker the user
+			// excluded after the job was persisted.
 			if !b.Sendable() {
+				continue
+			}
+			if brokerExcluded(excludedBrokers, b) {
 				continue
 			}
 			toSend = append(toSend, BrokerWithStatus{Broker: b, Status: "never"})
@@ -114,7 +120,7 @@ func (s *Server) handleAPISendOne(w http.ResponseWriter, r *http.Request) {
 
 	brokerID := chi.URLParam(r, "brokerID")
 
-	br := s.brokerDB.FindByID(brokerID)
+	br := s.getBrokerDB().FindByID(brokerID)
 	if br == nil {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`<span class="text-red-600">Broker not found</span>`))
@@ -130,11 +136,22 @@ func (s *Server) handleAPISendOne(w http.ResponseWriter, r *http.Request) {
 
 	// Sendable(), not a bare empty-address check: this endpoint resolves the
 	// broker by ID and so never passes through the list-level filtering that
-	// getBrokersWithStatus applies, which is how a broker excluded there
-	// stayed reachable through this door.
+	// getBrokersWithStatus applies.
 	if !br.Sendable() {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = fmt.Fprintf(w, `<span class="text-amber-600">%s - needs manual follow-up (check for an opt-out form/portal)</span>`, template.HTMLEscapeString(br.NotSendableReason()))
+		return
+	}
+
+	// Same reason the exclusion check can't live in Sendable(): excluded
+	// brokers are a per-user config decision, and this ID-resolving endpoint
+	// skips the list-level filter that normally hides them. The opt-in view
+	// lists excluded brokers so they can be un-excluded, which makes this
+	// gate load-bearing instead of theoretical.
+	excludedBrokers, _ := s.excludedBrokerSets()
+	if brokerExcluded(excludedBrokers, *br) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`<span class="text-amber-600">Excluded in your settings - use the Include button on the brokers page to undo</span>`))
 		return
 	}
 
@@ -382,18 +399,24 @@ func (s *Server) handleAPISendAll(w http.ResponseWriter, r *http.Request) {
 }
 
 // sendable drops brokers an email must not go to: no contact address on
-// file, or a disposition tag saying email is the wrong channel (they
-// require their web form) or that there is nothing to ask for at all (B2B
-// only). They belong in the manual-follow-up flow
-// (`list-brokers --missing-email`, `pipeline`) instead of in a send job's
-// total. See broker.Broker.Sendable - the same gate the CLI, the
-// single-broker endpoint and the job-resume path all use.
+// file, a disposition tag saying email is the wrong channel (they require
+// their web form) or that there is nothing to ask for at all (B2B only), or
+// the user's own excluded_brokers list. They belong in the
+// manual-follow-up flow (`list-brokers --missing-email`, `pipeline`)
+// instead of in a send job's total. The disposition half is
+// broker.Broker.Sendable - the same gate the CLI, the single-broker
+// endpoint and the job-resume path all use; the Excluded half is checked
+// here because exclusion is per-user config state Sendable() cannot see,
+// and the brokers page's "Emailable in this view" count runs this helper
+// over a list that (with the non-sendable opt-in) can contain excluded
+// rows.
 func sendable(brokers []BrokerWithStatus) []BrokerWithStatus {
 	result := make([]BrokerWithStatus, 0, len(brokers))
 	for _, b := range brokers {
-		if b.Sendable() {
-			result = append(result, b)
+		if b.Excluded || !b.Sendable() {
+			continue
 		}
+		result = append(result, b)
 	}
 	return result
 }

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,6 +9,14 @@ import (
 	"github.com/eraser-privacy/eraser/internal/config"
 	"github.com/eraser-privacy/eraser/internal/email"
 	"github.com/go-chi/chi/v5"
+)
+
+// errProfileNotFound and errLastProfile are the profile writes' failure
+// modes, reported out of mutateConfig so the handler renders the right
+// status without the config having been saved.
+var (
+	errProfileNotFound = errors.New("profile not found")
+	errLastProfile     = errors.New("cannot delete the only configured profile")
 )
 
 // handleAPISwitchProfile sets the active-profile cookie (after validating
@@ -246,18 +255,14 @@ func (s *Server) handleSettingsProfileNew(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		cfg := s.getConfig()
-		if cfg == nil {
-			cfg = &config.Config{}
-		}
-		newCfg := *cfg
-		existing := cfg.GetProfiles()
-		newCfg.Profiles = append(append([]config.NamedProfile{}, existing...), config.NamedProfile{
-			ID:      config.SlugifyProfileID(profile.FirstName, profile.LastName, existing),
-			Profile: profile,
-		})
-
-		if err := config.Save(s.configPath, &newCfg); err != nil {
+		if err := s.mutateConfig(func(cfg *config.Config) error {
+			existing := cfg.GetProfiles()
+			cfg.Profiles = append(append([]config.NamedProfile{}, existing...), config.NamedProfile{
+				ID:      config.SlugifyProfileID(profile.FirstName, profile.LastName, existing),
+				Profile: profile,
+			})
+			return nil
+		}); err != nil {
 			s.renderWithCSRF(w, r, "settings/profile-new.html", map[string]interface{}{
 				"Title":   "Add Profile",
 				"Profile": profile,
@@ -265,7 +270,6 @@ func (s *Server) handleSettingsProfileNew(w http.ResponseWriter, r *http.Request
 			})
 			return
 		}
-		s.config.Store(&newCfg)
 
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
@@ -300,43 +304,43 @@ func (s *Server) handleSettingsProfileEdit(w http.ResponseWriter, r *http.Reques
 	if r.Method == "POST" {
 		limitFormBody(w, r)
 		// Carry forward the CLI-only fields on the profile being edited.
-		profile, errors := buildProfileFromForm(r, existing.Profile)
+		// Not named "errors": this handler also checks errors.Is below.
+		profile, fieldErrors := buildProfileFromForm(r, existing.Profile)
 
-		if len(errors) > 0 {
+		if len(fieldErrors) > 0 {
 			s.renderWithCSRF(w, r, "settings/profile-edit.html", map[string]interface{}{
 				"Title":     "Edit Profile",
 				"ProfileID": id,
 				"Profile":   profile,
-				"Errors":    errors,
+				"Errors":    fieldErrors,
 			})
 			return
 		}
 
-		newCfg := *cfg
-		if len(cfg.Profiles) > 0 {
+		err := s.mutateConfig(func(cfg *config.Config) error {
+			if len(cfg.Profiles) == 0 {
+				// Legacy single-profile mode (no profiles: list yet) - write
+				// back to the top-level profile: block rather than promoting
+				// to a profiles: list just because it was edited.
+				cfg.Profile = profile
+				return nil
+			}
 			updated := make([]config.NamedProfile, len(cfg.Profiles))
 			copy(updated, cfg.Profiles)
-			found := false
 			for i, p := range updated {
 				if strings.EqualFold(p.ID, existing.ID) {
 					updated[i].Profile = profile
-					found = true
-					break
+					cfg.Profiles = updated
+					return nil
 				}
 			}
-			if !found {
-				http.Error(w, "Profile not found", http.StatusNotFound)
-				return
-			}
-			newCfg.Profiles = updated
-		} else {
-			// Legacy single-profile mode (no profiles: list yet) - write
-			// back to the top-level profile: block rather than promoting to
-			// a profiles: list just because it was edited.
-			newCfg.Profile = profile
-		}
-
-		if err := config.Save(s.configPath, &newCfg); err != nil {
+			return errProfileNotFound
+		})
+		switch {
+		case errors.Is(err, errProfileNotFound):
+			http.Error(w, "Profile not found", http.StatusNotFound)
+			return
+		case err != nil:
 			s.renderWithCSRF(w, r, "settings/profile-edit.html", map[string]interface{}{
 				"Title":     "Edit Profile",
 				"ProfileID": id,
@@ -345,7 +349,6 @@ func (s *Server) handleSettingsProfileEdit(w http.ResponseWriter, r *http.Reques
 			})
 			return
 		}
-		s.config.Store(&newCfg)
 
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
@@ -374,34 +377,40 @@ func (s *Server) handleSettingsProfileDelete(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	profiles := cfg.GetProfiles()
-	if len(profiles) <= 1 {
+	// The list is re-read inside the write, so "the last profile" is decided
+	// against the config actually being saved rather than a snapshot another
+	// request may already have replaced.
+	err := s.mutateConfig(func(cfg *config.Config) error {
+		profiles := cfg.GetProfiles()
+		if len(profiles) <= 1 {
+			return errLastProfile
+		}
+		remaining := make([]config.NamedProfile, 0, len(profiles)-1)
+		found := false
+		for _, p := range profiles {
+			if strings.EqualFold(p.ID, id) {
+				found = true
+				continue
+			}
+			remaining = append(remaining, p)
+		}
+		if !found {
+			return errProfileNotFound
+		}
+		cfg.Profiles = remaining
+		return nil
+	})
+	switch {
+	case errors.Is(err, errLastProfile):
 		http.Error(w, "Can't delete the only configured profile", http.StatusBadRequest)
 		return
-	}
-
-	remaining := make([]config.NamedProfile, 0, len(profiles)-1)
-	found := false
-	for _, p := range profiles {
-		if strings.EqualFold(p.ID, id) {
-			found = true
-			continue
-		}
-		remaining = append(remaining, p)
-	}
-	if !found {
+	case errors.Is(err, errProfileNotFound):
 		http.Error(w, "Profile not found", http.StatusNotFound)
 		return
-	}
-
-	newCfg := *cfg
-	newCfg.Profiles = remaining
-
-	if err := config.Save(s.configPath, &newCfg); err != nil {
+	case err != nil:
 		http.Error(w, "Failed to save configuration: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.config.Store(&newCfg)
 
 	// If the deleted profile was the active one, clear the cookie instead
 	// of leaving it pointing at an ID that no longer resolves - activeProfile

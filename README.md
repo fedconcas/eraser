@@ -124,7 +124,7 @@ go build -o eraser ./cmd/eraser
 | `eraser status --limit 50` | Show more history |
 | `eraser add-broker` | Add a custom broker interactively |
 | `eraser mark-bounced <broker-id>...` | Correct the record for brokers whose email actually bounced |
-| `eraser cleanup-bounces` | Find and remove bounced broker email addresses |
+| `eraser cleanup-bounces` | Find broker addresses that bounced; `--remove` clears the dead ones (the broker entries are kept) |
 | `eraser monitor` | Monitor your inbox (IMAP) for broker responses |
 | `eraser pipeline` | Show pipeline status — which brokers need manual follow-up |
 | `eraser confirm` | Click confirmation links found in broker emails |

@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/eraser-privacy/eraser/internal/fsutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -88,9 +91,30 @@ const (
 	// requests by email and requires its web form. Still a live target -
 	// just one you action through OptOutURL, not SMTP.
 	TagFormOnly = "form-only"
+	// TagUSDataOnly marks a company that told us it only holds data on US
+	// customers. Unlike the two above it is a SCOPE note, not a refusal:
+	// the company holds consumer data and answers erasure requests, just not
+	// for people outside the US. Most people running this tool are in the
+	// US, so it must never block a send - it is there to explain a "we have
+	// no record of you" reply to someone writing from the EU/UK, and to
+	// filter for. See Sendable().
+	TagUSDataOnly = "us-data-only"
 )
 
-var DispositionTags = []string{TagB2BOnly, TagFormOnly}
+var DispositionTags = []string{TagB2BOnly, TagFormOnly, TagUSDataOnly}
+
+// IsDispositionTag reports whether tag (case-insensitive) is part of the
+// closed DispositionTags vocabulary. Callers validating user input must
+// reject anything else rather than treating it as "no disposition".
+func IsDispositionTag(tag string) bool {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	for _, t := range DispositionTags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
+}
 
 // HasTag reports whether b carries tag (case-insensitive).
 func (b Broker) HasTag(tag string) bool {
@@ -117,6 +141,11 @@ func (b Broker) Sendable() bool {
 	if strings.TrimSpace(b.Email) == "" {
 		return false
 	}
+	// us-data-only is deliberately NOT a block. Most people using this tool
+	// are in the US, where "we only hold data on US customers" describes
+	// exactly the broker they most need to write to. The tag stays as a
+	// classification - it is shown on the row and filterable - but it never
+	// takes a broker out of anyone's send list.
 	return !b.HasTag(TagB2BOnly) && !b.HasTag(TagFormOnly)
 }
 
@@ -132,6 +161,117 @@ func (b Broker) NotSendableReason() string {
 		return "No email on file"
 	}
 	return ""
+}
+
+// AddTag adds tag (canonical lowercase) unless already present. Returns
+// whether the tag list changed. It appends into a CLONED slice: Broker
+// structs are shared by value between copy-on-write snapshots of the
+// broker database (see Server.mutateBrokers in internal/web), and
+// appending into a shared backing array could corrupt a snapshot an
+// in-flight reader is holding.
+func (b *Broker) AddTag(tag string) bool {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if tag == "" || b.HasTag(tag) {
+		return false
+	}
+	b.Tags = append(slices.Clone(b.Tags), tag)
+	return true
+}
+
+// RemoveTag drops tag (case-insensitive) if present and returns whether the
+// tag list changed. Also clones, for the same reason as AddTag.
+func (b *Broker) RemoveTag(tag string) bool {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	out := make([]string, 0, len(b.Tags))
+	removed := false
+	for _, t := range b.Tags {
+		if strings.ToLower(strings.TrimSpace(t)) == tag {
+			removed = true
+			continue
+		}
+		out = append(out, t)
+	}
+	if !removed {
+		return false
+	}
+	b.Tags = out
+	return true
+}
+
+// ApplyDisposition is the one place the disposition-tag rules live: validate
+// the tag against the closed vocabulary, add or remove it, and make sure a
+// tagged broker carries an explanation (the shipped-data test requires a
+// tagged broker to have Notes, so a tag applied with nothing to say still
+// gets an audit line). note, when non-empty, replaces Notes outright - it is
+// the evidence the user is recording. via names the door the change came
+// through ("CLI", "web UI") and appears in the auto-filled note.
+//
+// Both the CLI's tag-broker and the web UI's tag endpoint go through here:
+// they used to each carry their own copy of these rules and had already
+// drifted apart on whether the tag was normalized before validation.
+// Reports whether anything changed; an unchanged broker must not be saved,
+// because Save renormalizes the whole file.
+func ApplyDisposition(b *Broker, tag string, remove bool, note, via string) (bool, error) {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if !IsDispositionTag(tag) {
+		return false, fmt.Errorf("invalid tag %q: must be one of %s", tag, strings.Join(DispositionTags, ", "))
+	}
+
+	var changed bool
+	if remove {
+		changed = b.RemoveTag(tag)
+	} else {
+		changed = b.AddTag(tag)
+	}
+	if !changed {
+		return false, nil
+	}
+
+	switch {
+	case strings.TrimSpace(note) != "":
+		b.Notes = note
+	case !remove && strings.TrimSpace(b.Notes) == "":
+		b.Notes = fmt.Sprintf("Tagged %s via %s on %s.", tag, via, time.Now().Format("Jan 2, 2006"))
+	}
+	return true, nil
+}
+
+// MarkEmailUnreachable clears b's contact address after it was proven
+// undeliverable, recording what happened in Notes. Returns whether anything
+// changed - a broker whose address has already been cleared, or whose
+// current address is not the one that bounced, is left alone.
+//
+// The broker itself is deliberately kept: an entry with no address still
+// carries the company's name, category, website and opt-out URL, still shows
+// up under "Include non-sendable" and in list-brokers --missing-email, and
+// can be given a working address later. Deleting the row would throw all of
+// that away and silently shrink the shipped database.
+//
+// evidence is the wording from the bounce notification; it goes into Notes
+// so a future reader can tell an automatic clear from a hand edit, and can
+// see which address was dropped.
+func MarkEmailUnreachable(b *Broker, addr, evidence string) bool {
+	if b == nil {
+		return false
+	}
+	addr = strings.ToLower(strings.TrimSpace(addr))
+	current := strings.ToLower(strings.TrimSpace(b.Email))
+	if addr == "" || current == "" || current != addr {
+		return false
+	}
+
+	b.Email = ""
+	note := fmt.Sprintf("Address %s cleared on %s: mail to it is permanently undeliverable.",
+		addr, time.Now().Format("Jan 2, 2006"))
+	if evidence = strings.TrimSpace(evidence); evidence != "" {
+		note += " Bounce said: " + evidence
+	}
+	if strings.TrimSpace(b.Notes) == "" {
+		b.Notes = note
+	} else {
+		b.Notes = strings.TrimSpace(b.Notes) + " " + note
+	}
+	return true
 }
 
 // Sendable filters list down to the brokers an email may actually go to.
@@ -200,10 +340,14 @@ func LoadFromFile(path string) (*BrokerDatabase, error) {
 	return &db, nil
 }
 
-func toSet(items []string) map[string]bool {
+// ToSet lower-cases and trims items into a lookup set. Exported because the
+// web UI matches the same excluded_brokers list Filter does and must
+// normalize entries identically - a hand-written " spokeo" has to mean the
+// same thing on both sides.
+func ToSet(items []string) map[string]bool {
 	m := make(map[string]bool, len(items))
 	for _, s := range items {
-		m[strings.ToLower(s)] = true
+		m[strings.ToLower(strings.TrimSpace(s))] = true
 	}
 	return m
 }
@@ -213,7 +357,7 @@ func toSet(items []string) map[string]bool {
 // (case-insensitive) is in excludedCategories - e.g. "requires-id" to skip
 // brokers that demand a government ID document before acting on a request.
 func (db *BrokerDatabase) Filter(regions []string, excluded []string, excludedCategories []string) []Broker {
-	regionSet, excludedSet, excludedCatSet := toSet(regions), toSet(excluded), toSet(excludedCategories)
+	regionSet, excludedSet, excludedCatSet := ToSet(regions), ToSet(excluded), ToSet(excludedCategories)
 
 	var result []Broker
 	for _, b := range db.Brokers {
@@ -247,7 +391,7 @@ func SelectCategories(list []Broker, cats []string) []Broker {
 	if len(cats) == 0 {
 		return list
 	}
-	want := toSet(cats)
+	want := ToSet(cats)
 	var out []Broker
 	for _, b := range list {
 		if want[strings.ToLower(b.Category)] {
@@ -264,7 +408,7 @@ func SelectIDs(list []Broker, ids []string) []Broker {
 	if len(ids) == 0 {
 		return list
 	}
-	want := toSet(ids)
+	want := ToSet(ids)
 	var out []Broker
 	for _, b := range list {
 		if want[strings.ToLower(b.ID)] || want[strings.ToLower(b.Name)] {
@@ -299,7 +443,7 @@ func FilterByPriority(brokers []Broker, priorities []string) []Broker {
 	if len(priorities) == 0 {
 		return brokers
 	}
-	want := toSet(priorities)
+	want := ToSet(priorities)
 
 	result := make([]Broker, 0, len(brokers))
 	for _, b := range brokers {
@@ -331,12 +475,18 @@ func (db *BrokerDatabase) FindByID(id string) *Broker {
 	return nil
 }
 
+// Save writes the database to path. The write is atomic (temp file in the
+// same directory, then rename) because the web UI now rewrites this file on
+// ordinary row actions: a plain os.WriteFile truncates first, so a process
+// killed mid-write would leave a partial brokers.yaml that either fails to
+// parse or - worse - still parses, silently short of every broker after the
+// cut.
 func (db *BrokerDatabase) Save(path string) error {
 	data, err := yaml.Marshal(db)
 	if err != nil {
 		return fmt.Errorf("failed to serialize brokers: %w", err)
 	}
-	return os.WriteFile(path, data, 0644)
+	return fsutil.WriteFileAtomic(path, data, 0644)
 }
 
 func (db *BrokerDatabase) Add(broker Broker) error {
@@ -353,20 +503,6 @@ func (db *BrokerDatabase) FindByEmail(email string) *Broker {
 	for i := range db.Brokers {
 		if strings.ToLower(db.Brokers[i].Email) == email {
 			return &db.Brokers[i]
-		}
-	}
-	return nil
-}
-
-// RemoveByEmail removes a broker by their email address
-// Returns the removed broker, or nil if not found
-func (db *BrokerDatabase) RemoveByEmail(email string) *Broker {
-	email = strings.ToLower(email)
-	for i := range db.Brokers {
-		if strings.ToLower(db.Brokers[i].Email) == email {
-			removed := db.Brokers[i]
-			db.Brokers = append(db.Brokers[:i], db.Brokers[i+1:]...)
-			return &removed
 		}
 	}
 	return nil

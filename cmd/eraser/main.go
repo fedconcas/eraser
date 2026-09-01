@@ -67,6 +67,8 @@ send via Gmail SMTP.`,
 	rootCmd.AddCommand(listBrokersCmd())
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(addBrokerCmd())
+	rootCmd.AddCommand(tagBrokerCmd())
+	rootCmd.AddCommand(auditBrokersCmd())
 	rootCmd.AddCommand(monitorCmd())
 	rootCmd.AddCommand(pipelineCmd())
 	rootCmd.AddCommand(fillCmd())

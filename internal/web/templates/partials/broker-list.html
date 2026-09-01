@@ -1,6 +1,20 @@
 <!-- Single source for the broker table. brokers.html invokes this by name;
      do not re-duplicate it inline there. -->
+<!-- The per-row Tag select and Exclude/Include button POST via HTMX and the
+     response re-renders this whole list. A broker that was just tagged
+     non-sendable or excluded can legitimately disappear from the
+     re-rendered view - that is the effect of the action under the current
+     filters, not a failed request. Excluded rows only appear at all when
+     the page's "Include non-sendable" checkbox is ticked, which is also
+     where the Include button lives to undo an exclusion. -->
 <!-- Count header -->
+{{if .OutOfBand}}
+<!-- Fragment renders only: refresh the page header's "Emailable in this view"
+     counter out-of-band, since it lives outside this partial and a tag or
+     exclude action can change it. Full-page renders must not emit this -
+     it would show as a stray number in the list - hence the guard. -->
+<span id="sendable-count" hx-swap-oob="innerHTML">{{.SendableCount}}</span>
+{{end}}
 <div class="px-4 py-3 border-b border-[var(--border)] bg-elevated flex flex-wrap items-center justify-between gap-2">
     <p class="text-sm text-secondary">Showing <span class="font-medium text-primary">{{.Filtered}}</span> of <span class="font-medium text-primary">{{.Total}}</span> brokers</p>
     <p class="text-sm text-muted"><span class="font-medium text-primary" data-selection-count>0</span> selected</p>
@@ -27,16 +41,18 @@
             {{range .Brokers}}
             <tr>
                 <td>
-                    {{if .Sendable}}
+                    {{if and .Sendable (not .Excluded)}}
                     <input type="checkbox" class="broker-select" value="{{.ID}}" aria-label="Select {{.Name}}">
                     {{else}}
-                    <input type="checkbox" disabled title="{{.NotSendableReason}}" aria-label="{{.Name}} cannot be emailed: {{.NotSendableReason}}">
+                    <input type="checkbox" disabled title="{{if .Excluded}}Excluded in your settings{{else}}{{.NotSendableReason}}{{end}}" aria-label="{{.Name}} cannot be emailed{{if .Excluded}}: excluded in your settings{{else}}: {{.NotSendableReason}}{{end}}">
                     {{end}}
                 </td>
                 <td>
                     <div class="flex flex-col">
                         <span class="font-medium text-primary">{{.Name}}</span>
-                        {{if .Sendable}}
+                        {{if .Excluded}}
+                        <span class="text-sm text-warning" title="On your excluded_brokers list - the Include button on this row undoes it">Excluded in your settings</span>
+                        {{else if .Sendable}}
                         <span class="text-sm text-muted">{{.Email}}</span>
                         {{else}}
                         <span class="text-sm text-warning" title="{{if .Notes}}{{.Notes}}{{else}}Needs manual follow-up{{end}}">{{.NotSendableReason}}</span>
@@ -95,8 +111,54 @@
                     {{end}}
                 </td>
                 <td class="text-right">
+                    {{$row := .}}
                     <div class="flex items-center justify-end gap-2">
-                        {{if .Sendable}}
+                        <select
+                            name="tag_change"
+                            class="input w-auto text-sm py-1"
+                            aria-label="Change disposition tag for {{.Name}}"
+                            title="Mark this broker as B2B-only / US-data-only / web-form-only, or remove such a mark"
+                            hx-post="/api/brokers/{{.ID}}/tag"
+                            hx-trigger="change"
+                            hx-target="#broker-list"
+                            hx-swap="innerHTML"
+                            hx-include="#broker-filters"
+                        >
+                            <option value="">Tag&hellip;</option>
+                            {{range $.DispositionTags}}
+                            {{if $row.HasTag .}}
+                            <option value="remove:{{.}}">Remove {{.}}</option>
+                            {{else}}
+                            <option value="add:{{.}}">Mark {{.}}</option>
+                            {{end}}
+                            {{end}}
+                        </select>
+                        {{if .Excluded}}
+                        <input type="hidden" id="exclude-action-{{.ID}}" name="action" value="include">
+                        <button
+                            class="btn btn-ghost text-sm py-1 px-3"
+                            hx-post="/api/brokers/{{.ID}}/exclude"
+                            hx-target="#broker-list"
+                            hx-swap="innerHTML"
+                            hx-include="#exclude-action-{{.ID}},#broker-filters"
+                            title="Put this broker back in your send list"
+                        >
+                            Include
+                        </button>
+                        {{else}}
+                        <input type="hidden" id="exclude-action-{{.ID}}" name="action" value="exclude">
+                        <button
+                            class="btn btn-ghost text-sm py-1 px-3"
+                            hx-post="/api/brokers/{{.ID}}/exclude"
+                            hx-target="#broker-list"
+                            hx-swap="innerHTML"
+                            hx-include="#exclude-action-{{.ID}},#broker-filters"
+                            title="Hide this broker and never send to it (undo via Include in the non-sendable view)"
+                        >
+                            Exclude
+                        </button>
+                        {{end}}
+                        {{if and .Sendable (not .Excluded)}}
                         <button
                             class="btn btn-ghost text-sm py-1 px-3"
                             hx-post="/api/send/{{.ID}}"
@@ -110,7 +172,7 @@
                             </span>
                         </button>
                         {{else}}
-                        <button class="btn btn-ghost text-sm py-1 px-3" disabled title="{{.NotSendableReason}}">
+                        <button class="btn btn-ghost text-sm py-1 px-3" disabled title="{{if .Excluded}}Excluded in your settings{{else}}{{.NotSendableReason}}{{end}}">
                             Send
                         </button>
                         {{end}}
@@ -148,14 +210,16 @@
     <div class="p-4">
         <div class="flex items-start justify-between mb-3 gap-3">
             <div class="flex items-start gap-3">
-                {{if .Sendable}}
+                {{if and .Sendable (not .Excluded)}}
                 <input type="checkbox" class="broker-select mt-1" value="{{.ID}}" aria-label="Select {{.Name}}">
                 {{else}}
-                <input type="checkbox" class="mt-1" disabled title="{{.NotSendableReason}}" aria-label="{{.Name}} cannot be emailed">
+                <input type="checkbox" class="mt-1" disabled title="{{if .Excluded}}Excluded in your settings{{else}}{{.NotSendableReason}}{{end}}" aria-label="{{.Name}} cannot be emailed">
                 {{end}}
                 <div>
                     <h3 class="font-medium text-primary">{{.Name}}</h3>
-                    {{if .Sendable}}
+                    {{if .Excluded}}
+                    <p class="text-sm text-warning">Excluded in your settings</p>
+                    {{else if .Sendable}}
                     <p class="text-sm text-muted">{{.Email}}</p>
                     {{else}}
                     <p class="text-sm text-warning">{{.NotSendableReason}}</p>
@@ -192,8 +256,9 @@
             <span class="text-muted uppercase">{{.Region}}</span>
             {{end}}
         </div>
+        {{$row := .}}
         <div class="flex gap-2">
-            {{if .Sendable}}
+            {{if and .Sendable (not .Excluded)}}
             <button
                 class="btn btn-primary flex-1 py-2"
                 hx-post="/api/send/{{.ID}}"
@@ -203,8 +268,8 @@
                 Send Request
             </button>
             {{else}}
-            <button class="btn btn-primary flex-1 py-2" disabled title="{{.NotSendableReason}}">
-                {{.NotSendableReason}}
+            <button class="btn btn-primary flex-1 py-2" disabled title="{{if .Excluded}}Excluded in your settings{{else}}{{.NotSendableReason}}{{end}}">
+                {{if .Excluded}}Excluded{{else}}{{.NotSendableReason}}{{end}}
             </button>
             {{end}}
             {{if .OptOutURL}}
@@ -213,6 +278,50 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
             </a>
+            {{end}}
+        </div>
+        <div class="flex flex-wrap items-center gap-2 mt-2">
+            <select
+                name="tag_change"
+                class="input w-auto text-sm py-1"
+                aria-label="Change disposition tag for {{.Name}}"
+                hx-post="/api/brokers/{{.ID}}/tag"
+                hx-trigger="change"
+                hx-target="#broker-list"
+                hx-swap="innerHTML"
+                hx-include="#broker-filters"
+            >
+                <option value="">Tag&hellip;</option>
+                {{range $.DispositionTags}}
+                {{if $row.HasTag .}}
+                <option value="remove:{{.}}">Remove {{.}}</option>
+                {{else}}
+                <option value="add:{{.}}">Mark {{.}}</option>
+                {{end}}
+                {{end}}
+            </select>
+            {{if .Excluded}}
+            <input type="hidden" id="exclude-action-mobile-{{.ID}}" name="action" value="include">
+            <button
+                class="btn btn-ghost text-sm py-1 px-3"
+                hx-post="/api/brokers/{{.ID}}/exclude"
+                hx-target="#broker-list"
+                hx-swap="innerHTML"
+                hx-include="#exclude-action-mobile-{{.ID}},#broker-filters"
+            >
+                Include
+            </button>
+            {{else}}
+            <input type="hidden" id="exclude-action-mobile-{{.ID}}" name="action" value="exclude">
+            <button
+                class="btn btn-ghost text-sm py-1 px-3"
+                hx-post="/api/brokers/{{.ID}}/exclude"
+                hx-target="#broker-list"
+                hx-swap="innerHTML"
+                hx-include="#exclude-action-mobile-{{.ID}},#broker-filters"
+            >
+                Exclude
+            </button>
             {{end}}
         </div>
     </div>

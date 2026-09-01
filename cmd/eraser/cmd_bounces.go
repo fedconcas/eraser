@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/eraser-privacy/eraser/internal/broker"
 	"github.com/eraser-privacy/eraser/internal/config"
@@ -20,23 +19,33 @@ func cleanupBouncesCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "cleanup-bounces",
-		Short: "Find and remove bounced broker email addresses",
-		Long: `Scan your inbox for bounced/undeliverable emails and identify
-invalid broker email addresses. Optionally remove them from the database.
+		Short: "Find and clear broker email addresses that bounced",
+		Long: `Scan your inbox for bounced/undeliverable emails and identify broker
+email addresses that no longer accept mail.
 
-By default, this command shows what would be removed without making changes.
-Use --remove to actually remove the invalid brokers from the database.
+By default this only reports. With --remove, the dead ADDRESS is cleared -
+the broker entry itself is kept, with the dropped address and the bounce
+wording recorded in its notes. It keeps its name, category, website and
+opt-out URL, still shows up in 'list-brokers --missing-email' and under
+"Include non-sendable" in the web UI, and can be given a working address
+later. (Deleting the whole company, which this used to do, threw all of
+that away and silently shrank the shipped database.)
+
+Only permanent failures are acted on. A full mailbox, a greylisting
+deferral or any other temporary failure is reported and left alone - the
+address is fine, the message just did not get through this time. The web
+UI's inbox scan applies the same rule automatically.
 
 Examples:
-  eraser cleanup-bounces                 # Show bounced emails (dry run)
-  eraser cleanup-bounces --remove        # Remove bounced brokers
+  eraser cleanup-bounces                 # Show bounced addresses (dry run)
+  eraser cleanup-bounces --remove        # Clear the dead addresses
   eraser cleanup-bounces --days 30       # Look back 30 days`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCleanupBounces(remove, days)
 		},
 	}
 
-	cmd.Flags().BoolVar(&remove, "remove", false, "Actually remove bounced brokers from database")
+	cmd.Flags().BoolVar(&remove, "remove", false, "Clear the dead addresses (the broker entries themselves are kept)")
 	cmd.Flags().IntVar(&days, "days", 30, "Number of days to scan for bounced emails")
 
 	return cmd
@@ -88,14 +97,15 @@ func runCleanupBounces(remove bool, days int) error {
 
 	fmt.Printf("Found %d bounced email(s):\n\n", len(bounceEmails))
 
-	// Track brokers to remove
+	// Track the addresses worth acting on, and the ones deliberately left
+	// alone, so the summary can say why.
 	type bouncedBroker struct {
-		email      string
-		broker     *broker.Broker
-		subject    string
-		receivedAt time.Time
+		email    string
+		broker   *broker.Broker
+		evidence string
 	}
-	var bouncedBrokers []bouncedBroker
+	var dead []bouncedBroker
+	var transient int
 
 	for _, email := range bounceEmails {
 		// Extract the bounced recipient
@@ -112,42 +122,64 @@ func runCleanupBounces(remove bool, days int) error {
 			continue
 		}
 
+		// A temporary failure says nothing about the address. Clearing one
+		// would drop a live broker out of every future send with nothing to
+		// put it back, so it is reported and skipped - same rule the web
+		// UI's scan applies (see internal/inbox/bounce.go).
+		if !inbox.IsHardBounce(&email) {
+			transient++
+			fmt.Printf("⏳ %s\n", bouncedRecipient)
+			fmt.Printf("   Broker: %s (%s)\n", b.Name, b.ID)
+			fmt.Printf("   Temporary failure - address kept: %s\n", truncateString(email.Subject, 60))
+			fmt.Println()
+			continue
+		}
+
 		fmt.Printf("❌ %s\n", bouncedRecipient)
 		fmt.Printf("   Broker: %s (%s)\n", b.Name, b.ID)
 		fmt.Printf("   Subject: %s\n", truncateString(email.Subject, 60))
 		fmt.Printf("   Date: %s\n", email.ReceivedAt.Format("2006-01-02"))
 		fmt.Println()
 
-		bouncedBrokers = append(bouncedBrokers, bouncedBroker{
-			email:      bouncedRecipient,
-			broker:     b,
-			subject:    email.Subject,
-			receivedAt: email.ReceivedAt,
+		dead = append(dead, bouncedBroker{
+			email:    bouncedRecipient,
+			broker:   b,
+			evidence: inbox.BounceEvidence(&email),
 		})
 	}
 
-	if len(bouncedBrokers) == 0 {
-		fmt.Println("✓ No broker email addresses need to be removed")
+	if len(dead) == 0 {
+		if transient > 0 {
+			fmt.Printf("✓ No permanently dead addresses (%d temporary failure(s) left alone)\n", transient)
+			return nil
+		}
+		fmt.Println("✓ No broker email addresses need to be cleared")
 		return nil
 	}
 
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	if !remove {
-		fmt.Printf("\n📊 Found %d broker(s) with invalid email addresses\n", len(bouncedBrokers))
-		fmt.Println("Run with --remove to delete these brokers from the database")
+		fmt.Printf("\n📊 Found %d broker(s) whose address no longer accepts mail\n", len(dead))
+		fmt.Println("Run with --remove to clear those addresses (the brokers themselves are kept)")
 		return nil
 	}
 
-	// Remove the brokers
-	fmt.Printf("\n🗑️  Removing %d broker(s) from database...\n\n", len(bouncedBrokers))
+	fmt.Printf("\n📮 Clearing %d dead address(es)...\n\n", len(dead))
 
-	removed := 0
-	for _, bb := range bouncedBrokers {
-		if brokerDB.RemoveByEmail(bb.email) != nil {
-			fmt.Printf("✓ Removed %s (%s)\n", bb.broker.Name, bb.email)
-			removed++
+	cleared := 0
+	for _, bb := range dead {
+		// Clears the address and records it, with the bounce wording, in the
+		// broker's notes - the same helper the web UI's scan uses.
+		if broker.MarkEmailUnreachable(bb.broker, bb.email, bb.evidence) {
+			fmt.Printf("✓ Cleared %s from %s\n", bb.email, bb.broker.Name)
+			cleared++
 		}
+	}
+
+	if cleared == 0 {
+		fmt.Println("Nothing to change - those addresses were already cleared")
+		return nil
 	}
 
 	// Save with backup
@@ -157,7 +189,8 @@ func runCleanupBounces(remove bool, days int) error {
 
 	fmt.Println()
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Printf("✓ Removed %d broker(s) with invalid email addresses\n", removed)
+	fmt.Printf("✓ Cleared %d dead address(es); the broker entries were kept\n", cleared)
+	fmt.Println("  See them with: eraser list-brokers --missing-email")
 	fmt.Printf("  Backup saved to: %s.bak\n", brokerPath)
 
 	return nil

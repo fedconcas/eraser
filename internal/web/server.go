@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -108,9 +109,22 @@ func (rl *RateLimiter) cleanupLoop() {
 }
 
 type Server struct {
-	config         atomic.Pointer[config.Config]
-	configPath     string
-	brokerDB       *broker.BrokerDatabase
+	config atomic.Pointer[config.Config]
+	// configMu serialises writers in mutateConfig, for the same reason
+	// brokerMu exists below: the atomic pointer alone lets two concurrent
+	// POSTs each copy the same snapshot and silently drop one of the two
+	// changes (two Exclude clicks in flight, or an exclude landing next to
+	// a settings save).
+	configMu   sync.Mutex
+	configPath string
+	// brokerDB is an atomic.Pointer rather than a plain pointer because the
+	// tag/exclude endpoints now write it (via mutateBrokers) while page and
+	// API handlers read it concurrently. Readers take a snapshot with
+	// getBrokerDB() and work from that; writers never mutate a stored
+	// snapshot in place - see mutateBrokers for the copy-on-write protocol.
+	brokerDB       atomic.Pointer[broker.BrokerDatabase]
+	brokerMu       sync.Mutex // serialises writers in mutateBrokers
+	brokerPath     string     // data/brokers.yaml on disk; "" in tests (no persistence)
 	historyStore   *history.Store
 	tmplEngine     *emaTemplate.Engine
 	templates      map[string]*template.Template
@@ -123,7 +137,7 @@ type Server struct {
 	jobPersistence *JobPersistence
 }
 
-func NewServer(port int, cfg *config.Config, configPath string, brokerDB *broker.BrokerDatabase, historyStore *history.Store, tmplEngine *emaTemplate.Engine) (*Server, error) {
+func NewServer(port int, cfg *config.Config, configPath, brokerPath string, brokerDB *broker.BrokerDatabase, historyStore *history.Store, tmplEngine *emaTemplate.Engine) (*Server, error) {
 	csrfKey := make([]byte, 32)
 	if _, err := rand.Read(csrfKey); err != nil {
 		return nil, fmt.Errorf("failed to generate CSRF key: %w", err)
@@ -142,7 +156,7 @@ func NewServer(port int, cfg *config.Config, configPath string, brokerDB *broker
 
 	s := &Server{
 		configPath:     configPath,
-		brokerDB:       brokerDB,
+		brokerPath:     brokerPath,
 		historyStore:   historyStore,
 		tmplEngine:     tmplEngine,
 		port:           port,
@@ -153,6 +167,7 @@ func NewServer(port int, cfg *config.Config, configPath string, brokerDB *broker
 		jobPersistence: NewJobPersistence(dataDir),
 	}
 	s.config.Store(cfg)
+	s.brokerDB.Store(brokerDB)
 
 	tmpl, err := s.parseTemplates()
 	if err != nil {
@@ -160,6 +175,99 @@ func NewServer(port int, cfg *config.Config, configPath string, brokerDB *broker
 	}
 	s.templates = tmpl
 	return s, nil
+}
+
+// getBrokerDB returns the current broker database snapshot. Handlers snapshot
+// once per request and read from that; never hold the pointer across a
+// mutateBrokers call expecting freshness.
+func (s *Server) getBrokerDB() *broker.BrokerDatabase {
+	return s.brokerDB.Load()
+}
+
+// mutateBrokers is the ONLY write path for the broker database. It clones
+// the current snapshot, lets fn mutate the clone, persists to brokerPath
+// (SaveWithBackup) and only then publishes the new snapshot - so readers
+// never observe a half-written state and a failed save leaves the in-memory
+// DB untouched too. brokerMu serialises writers: an atomic pointer alone
+// would let two concurrent POSTs each copy the same snapshot and silently
+// drop one of the two changes. fn receives the clone and reports whether
+// anything changed; on unchanged=false the save and publish are skipped.
+func (s *Server) mutateBrokers(fn func(db *broker.BrokerDatabase) (changed bool, err error)) error {
+	s.brokerMu.Lock()
+	defer s.brokerMu.Unlock()
+
+	// Re-read the file rather than editing the snapshot loaded at startup:
+	// `eraser tag-broker` / `add-broker` / `cleanup-bounces` write the same
+	// file while the server runs, and publishing a stale snapshot over the
+	// top of them silently reverted those edits (a retired broker quietly
+	// re-entered the send list). Whatever is on disk wins; a file that no
+	// longer parses fails the write loudly instead of overwriting it.
+	clone, err := s.currentBrokersForWrite()
+	if err != nil {
+		return err
+	}
+
+	changed, err := fn(clone)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+
+	if s.brokerPath != "" {
+		if err := clone.SaveWithBackup(s.brokerPath); err != nil {
+			return fmt.Errorf("failed to save broker database: %w", err)
+		}
+	}
+	s.brokerDB.Store(clone)
+	return nil
+}
+
+// currentBrokersForWrite returns the database a mutateBrokers write should
+// start from: the file on disk when there is one, otherwise a copy of the
+// published snapshot (tests, and any embedded-data setup with no writable
+// path). Callers hold brokerMu.
+func (s *Server) currentBrokersForWrite() (*broker.BrokerDatabase, error) {
+	if s.brokerPath != "" {
+		db, err := broker.LoadFromFile(s.brokerPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to re-read broker database: %w", err)
+		}
+		return db, nil
+	}
+	cur := s.brokerDB.Load()
+	return &broker.BrokerDatabase{Brokers: slices.Clone(cur.Brokers)}, nil
+}
+
+// mutateConfig is the write path for the config, the twin of mutateBrokers:
+// it serialises writers, hands fn a copy to mutate (a concurrent reader - or
+// a running send job - may be holding the pointer getConfig returned),
+// persists it and only then publishes. fn's error is returned unchanged so
+// each handler can render its own message; nothing is saved or published in
+// that case.
+func (s *Server) mutateConfig(fn func(cfg *config.Config) error) error {
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+
+	cur := s.getConfig()
+	newCfg := config.Config{}
+	if cur != nil {
+		newCfg = *cur
+	}
+
+	if err := fn(&newCfg); err != nil {
+		return err
+	}
+
+	if s.configPath == "" {
+		return fmt.Errorf("config path not set")
+	}
+	if err := config.Save(s.configPath, &newCfg); err != nil {
+		return fmt.Errorf("failed to save configuration: %w", err)
+	}
+	s.config.Store(&newCfg)
+	return nil
 }
 
 // getConfig returns the server's current config. Server.config is an
@@ -400,6 +508,9 @@ func (s *Server) setupRouter() *chi.Mux {
 
 	// Routes
 	r.Get("/", s.handleDashboard)
+	// The landing tab: which law you are actually exercising, and which
+	// companies are worth writing to first, depending on where you live.
+	r.Get("/welcome", s.handleWelcome)
 	r.Get("/brokers", s.handleBrokers)
 	r.Get("/history", s.handleHistory)
 	r.Get("/settings", s.handleSettings)
@@ -436,6 +547,8 @@ func (s *Server) setupRouter() *chi.Mux {
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/brokers", s.handleAPIBrokers)
 		r.Get("/brokers/{brokerID}/status", s.handleAPIBrokerStatus)
+		r.Post("/brokers/{brokerID}/tag", s.handleAPITagBroker)
+		r.Post("/brokers/{brokerID}/exclude", s.handleAPIExcludeBroker)
 		r.Delete("/history/failed", s.handleAPIDeleteFailed)
 		r.Delete("/history", s.handleAPIDeleteAllHistory)
 		r.Post("/send/{brokerID}", s.handleAPISendOne)
@@ -607,6 +720,10 @@ type BrokerWithStatus struct {
 	Status    string // "never", "sent", "failed"
 	LastSent  string // formatted date or empty
 	TotalSent int
+	// Excluded marks brokers on the config's excluded_brokers list. They
+	// only appear when the query opts into non-sendable brokers, so the row
+	// controls can offer an "Include" button to undo an exclusion.
+	Excluded bool
 }
 
 // brokerQuery is the set of filters the brokers page, its HTMX fragment
@@ -626,6 +743,14 @@ type brokerQuery struct {
 	// company told us, a category is what sector it trades in, and the two
 	// have to be filterable independently.
 	Tag string
+	// NonSendable opts INTO showing brokers that can't be emailed: ones
+	// Sendable() rejects (b2b-only, form-only, us-data-only, no email) and
+	// ones on the user's excluded_brokers list (marked Excluded). The default
+	// view is sendable-only: the page lists brokers the user can actually
+	// message, and the rest stay in the data file, reachable through this
+	// flag - which is also how an excluded broker becomes visible again so it
+	// can be un-excluded from the UI.
+	NonSendable bool
 }
 
 // getBrokersWithStatus returns brokers with their history status
@@ -644,20 +769,7 @@ func (s *Server) getBrokersWithStatus(profileID string, q brokerQuery) []BrokerW
 	// list and bulk-send both went through this function instead, which
 	// never looked at either option, so a configured exclusion silently had
 	// no effect here. Apply the same two checks broker.Filter does.
-	var excludedIDs, excludedNames, excludedCats map[string]bool
-	if cfg := s.getConfig(); cfg != nil {
-		excludedIDs = make(map[string]bool, len(cfg.Options.ExcludedBrokers))
-		excludedNames = make(map[string]bool, len(cfg.Options.ExcludedBrokers))
-		for _, e := range cfg.Options.ExcludedBrokers {
-			e = strings.ToLower(e)
-			excludedIDs[e] = true
-			excludedNames[e] = true
-		}
-		excludedCats = make(map[string]bool, len(cfg.Options.ExcludedCategories))
-		for _, c := range cfg.Options.ExcludedCategories {
-			excludedCats[strings.ToLower(c)] = true
-		}
-	}
+	excludedBrokers, excludedCats := s.excludedBrokerSets()
 
 	search := strings.ToLower(strings.TrimSpace(q.Search))
 	category := strings.ToLower(strings.TrimSpace(q.Category))
@@ -670,11 +782,25 @@ func (s *Server) getBrokersWithStatus(profileID string, q brokerQuery) []BrokerW
 	tag := strings.ToLower(strings.TrimSpace(q.Tag))
 
 	var result []BrokerWithStatus
-	for _, b := range s.brokerDB.Brokers {
-		if excludedIDs[strings.ToLower(b.ID)] || excludedNames[strings.ToLower(b.Name)] {
+	db := s.getBrokerDB()
+	// The page default is "brokers you can message": everything Sendable()
+	// rejects stays in the data file but out of the list. MissingEmail
+	// implies opting in - missing-email brokers are all non-sendable, so
+	// without this that filter would always render empty.
+	showNonSendable := q.NonSendable || q.MissingEmail
+	for _, b := range db.Brokers {
+		excluded := brokerExcluded(excludedBrokers, b)
+		// Excluded brokers are only visible in the opt-in view - that is
+		// where the row's Include button lets the user undo an exclusion.
+		// Category exclusions stay a hard skip: there is no per-category
+		// undo control to put back what that view would surface.
+		if excluded && !q.NonSendable {
 			continue
 		}
 		if excludedCats[strings.ToLower(b.Category)] {
+			continue
+		}
+		if !showNonSendable && !b.Sendable() {
 			continue
 		}
 
@@ -714,8 +840,9 @@ func (s *Server) getBrokersWithStatus(profileID string, q brokerQuery) []BrokerW
 		}
 
 		bws := BrokerWithStatus{
-			Broker: b,
-			Status: "never",
+			Broker:   b,
+			Status:   "never",
+			Excluded: excluded,
 		}
 
 		if status, ok := brokerStatuses[b.ID]; ok {
@@ -743,10 +870,33 @@ func (s *Server) getBrokersWithStatus(profileID string, q brokerQuery) []BrokerW
 	return result
 }
 
+// excludedBrokerSets returns the config's excluded_brokers set and its
+// excluded_categories set. One set, not one per spelling: an entry matches a
+// broker by ID or by name (broker.Filter on the CLI side does the same, from
+// the same broker.ToSet normalization), so the two maps this used to return
+// always held identical contents. Shared by getBrokersWithStatus, the
+// single-send endpoint and the pending-job resume so every gate reads the
+// config the same way - use brokerExcluded to test against it.
+func (s *Server) excludedBrokerSets() (brokers, categories map[string]bool) {
+	cfg := s.getConfig()
+	if cfg == nil {
+		return map[string]bool{}, map[string]bool{}
+	}
+	return broker.ToSet(cfg.Options.ExcludedBrokers), broker.ToSet(cfg.Options.ExcludedCategories)
+}
+
+// brokerExcluded reports whether b is named in an excluded_brokers set, by
+// ID or by name. The one place that rule is written, so the list gate and
+// the three send gates can never disagree about who gets emailed.
+func brokerExcluded(excluded map[string]bool, b broker.Broker) bool {
+	return excluded[strings.ToLower(strings.TrimSpace(b.ID))] ||
+		excluded[strings.ToLower(strings.TrimSpace(b.Name))]
+}
+
 func (s *Server) getUniqueValues(getter func(broker.Broker) string) []string {
 	seen := make(map[string]bool)
 	var vals []string
-	for _, b := range s.brokerDB.Brokers {
+	for _, b := range s.getBrokerDB().Brokers {
 		if v := getter(b); v != "" && !seen[v] {
 			seen[v] = true
 			vals = append(vals, v)
@@ -759,22 +909,13 @@ func (s *Server) getUniqueCategories() []string {
 	return s.getUniqueValues(func(b broker.Broker) string { return b.Category })
 }
 
-// getDispositionTags is the source for the /brokers tag dropdown. Unlike
-// categories and regions it is NOT derived from the loaded data: the
-// vocabulary is closed (broker.DispositionTags) and mostly unpopulated, so
-// deriving it would leave the filter empty until something happened to be
-// tagged - exactly when you most want to check that nothing is.
-func (s *Server) getDispositionTags() []string {
-	return broker.DispositionTags
-}
-
 func (s *Server) getUniqueRegions() []string {
 	return s.getUniqueValues(func(b broker.Broker) string { return b.Region })
 }
 
 func (s *Server) getStats(profileID string) Stats {
 	stats := Stats{
-		TotalBrokers: len(s.brokerDB.Brokers),
+		TotalBrokers: len(s.getBrokerDB().Brokers),
 	}
 
 	if s.historyStore != nil {

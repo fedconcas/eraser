@@ -18,23 +18,12 @@ import (
 
 // API handlers
 
+// handleAPIBrokers serves the brokers table as an HTMX fragment. Identical
+// to what the row actions re-render afterwards, so it is the same function:
+// brokerQueryFromForm reads the URL query on a GET, and the partial's data
+// map only has to be kept right in one place.
 func (s *Server) handleAPIBrokers(w http.ResponseWriter, r *http.Request) {
-	brokers := s.getBrokersWithStatus(s.activeProfile(r).ID, brokerQuery{
-		Search:       r.URL.Query().Get("search"),
-		Category:     r.URL.Query().Get("category"),
-		Region:       r.URL.Query().Get("region"),
-		Priority:     r.URL.Query().Get("priority"),
-		Status:       r.URL.Query().Get("status"),
-		MissingEmail: r.URL.Query().Get("missing_email") == "true",
-		Tag:          r.URL.Query().Get("tag"),
-	})
-
-	// Returns broker list as HTML fragment for HTMX
-	s.renderPartial(w, "partials/broker-list.html", map[string]interface{}{
-		"Brokers":  brokers,
-		"Filtered": len(brokers),
-		"Total":    len(s.brokerDB.Brokers),
-	})
+	s.renderBrokerListFragment(w, r)
 }
 
 // handleAPIBrokerStatus returns just the status-badge fragment for one
@@ -46,7 +35,7 @@ func (s *Server) handleAPIBrokers(w http.ResponseWriter, r *http.Request) {
 // this uses instead of the all-brokers GROUP BY.
 func (s *Server) handleAPIBrokerStatus(w http.ResponseWriter, r *http.Request) {
 	brokerID := chi.URLParam(r, "brokerID")
-	if s.brokerDB.FindByID(brokerID) == nil {
+	if s.getBrokerDB().FindByID(brokerID) == nil {
 		http.Error(w, "Broker not found", http.StatusNotFound)
 		return
 	}
@@ -196,7 +185,7 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create inbox monitor
-	monitor := inbox.NewMonitor(cfg.Inbox, s.brokerDB.Brokers)
+	monitor := inbox.NewMonitor(cfg.Inbox, s.getBrokerDB().Brokers)
 	s.applyContactedBrokerGate(monitor)
 
 	// Connect to IMAP
@@ -268,9 +257,15 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 	// Classify and store each email
 	var success, formRequired, confirmRequired, rejected, disclosure, unknown int
 	var processed []inbox.Email // Track which emails were processed, for archiving
+	// Addresses this scan proved permanently undeliverable, applied to the
+	// broker list once the loop is done (see applyBounceFindings).
+	var bounces []bounceFinding
 	for _, email := range emails {
 		classified := inbox.ClassifyResponse(&email)
 		processed = append(processed, email)
+		if f, ok := collectBounce(classified); ok {
+			bounces = append(bounces, f)
+		}
 
 		// Get body content (prefer plain text, fall back to HTML)
 		bodyContent := email.Body
@@ -339,6 +334,11 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Prune addresses this scan proved dead. Done before archiving so a
+	// failure to move mail can't cost us the finding, and before the summary
+	// so it can report what changed.
+	clearedAddresses := s.applyBounceFindings(bounces)
+
 	// Auto-archive processed emails to the Eraser folder.
 	//
 	// Grouped by the mailbox each was fetched from: this list mixes INBOX,
@@ -382,12 +382,13 @@ func (s *Server) handleAPIInboxScan(w http.ResponseWriter, r *http.Request) {
 				<div>Data disclosures: <span class="font-semibold">%d</span></div>
 				<div>Unknown: <span class="font-semibold">%d</span></div>
 			</div>
+			%s
 			<p class="mt-2 text-sm">
 				<a href="/tasks" class="underline font-medium">View pending tasks</a> |
 				<a href="/pipeline" class="underline" onclick="window.location.reload()">Refresh page</a>
 			</p>
 		</div>
-	`, len(emails), success, formRequired, confirmRequired, rejected, disclosure, unknown)
+	`, len(emails), success, formRequired, confirmRequired, rejected, disclosure, unknown, bounceSummaryHTML(clearedAddresses))
 }
 
 // handleAPIInboxRescan rescans all emails and reclassifies them with the improved classifier
@@ -418,7 +419,7 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create inbox monitor
-	monitor := inbox.NewMonitor(cfg.Inbox, s.brokerDB.Brokers)
+	monitor := inbox.NewMonitor(cfg.Inbox, s.getBrokerDB().Brokers)
 	s.applyContactedBrokerGate(monitor)
 
 	// Connect to IMAP with longer timeout for full rescan
@@ -469,8 +470,12 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 	// Classify and store/update each email
 	var success, formRequired, confirmRequired, rejected, pending, disclosure, unknown int
 	var updated, inserted int
+	var bounces []bounceFinding
 	for _, email := range emails {
 		classified := inbox.ClassifyResponse(&email)
+		if f, ok := collectBounce(classified); ok {
+			bounces = append(bounces, f)
+		}
 
 		// Get body content (prefer plain text, fall back to HTML)
 		bodyContent := email.Body
@@ -561,6 +566,8 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	clearedAddresses := s.applyBounceFindings(bounces)
+
 	// Return summary HTML
 	_, _ = fmt.Fprintf(w, `
 		<div class="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded">
@@ -578,12 +585,13 @@ func (s *Server) handleAPIInboxRescan(w http.ResponseWriter, r *http.Request) {
 				<div>Data disclosures: <span class="font-semibold">%d</span></div>
 				<div>Unknown: <span class="font-semibold">%d</span></div>
 			</div>
+			%s
 			<p class="mt-2 text-sm">
 				<a href="/tasks" class="underline font-medium">View action items</a> |
 				<a href="/pipeline" class="underline" onclick="window.location.reload()">Refresh page</a>
 			</p>
 		</div>
-	`, len(emails), updated, inserted, success, formRequired, confirmRequired, pending, rejected, disclosure, unknown)
+	`, len(emails), updated, inserted, success, formRequired, confirmRequired, pending, rejected, disclosure, unknown, bounceSummaryHTML(clearedAddresses))
 }
 
 // handleAPIReclassify reclassifies all existing database records using subject-only patterns
@@ -628,10 +636,10 @@ func (s *Server) handleAPIReclassify(w http.ResponseWriter, r *http.Request) {
 	// If there are records missing bodies, try to fetch from IMAP
 	cfg := s.getConfig()
 	var bodiesUpdated int
-	if missingBodies > 0 && cfg != nil && cfg.Inbox.Server != "" && s.brokerDB != nil {
+	if missingBodies > 0 && cfg != nil && cfg.Inbox.Server != "" && s.getBrokerDB() != nil {
 		log.Printf("Found %d records missing email bodies, fetching from IMAP...", missingBodies)
 
-		monitor := inbox.NewMonitor(cfg.Inbox, s.brokerDB.Brokers)
+		monitor := inbox.NewMonitor(cfg.Inbox, s.getBrokerDB().Brokers)
 		s.applyContactedBrokerGate(monitor)
 
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)

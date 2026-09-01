@@ -27,7 +27,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"Title":         "Dashboard",
 		"TemplateName":  templateLabel(cfg),
 		"Profile":       active.Profile,
-		"BrokerCount":   len(s.brokerDB.Brokers),
+		"BrokerCount":   len(s.getBrokerDB().Brokers),
 		"RecentHistory": s.getRecentHistory(active.ID, 10),
 		"Stats":         s.getStats(active.ID),
 		"PipelineStats": s.getPipelineStats(active.ID),
@@ -63,37 +63,40 @@ func templateLabel(cfg *config.Config) string {
 }
 
 func (s *Server) handleBrokers(w http.ResponseWriter, r *http.Request) {
-	q := brokerQuery{
-		Search:       r.URL.Query().Get("search"),
-		Category:     r.URL.Query().Get("category"),
-		Region:       r.URL.Query().Get("region"),
-		Priority:     r.URL.Query().Get("priority"),
-		Status:       r.URL.Query().Get("status"),
-		MissingEmail: r.URL.Query().Get("missing_email") == "true",
-		Tag:          r.URL.Query().Get("tag"),
-	}
+	// r.FormValue falls back to the URL query on a GET, so the page and the
+	// two fragment endpoints all read their filters through one function.
+	q := brokerQueryFromForm(r)
 
 	brokers := s.getBrokersWithStatus(s.activeProfile(r).ID, q)
 
 	dailyLimit := effectiveDailyLimit(s.getConfig())
 
 	data := map[string]interface{}{
-		"Title":        "Data Brokers",
-		"Brokers":      brokers,
-		"Categories":   s.getUniqueCategories(),
-		"Tags":         s.getDispositionTags(),
-		"Regions":      s.getUniqueRegions(),
-		"Priorities":   broker.Priorities,
-		"Search":       q.Search,
-		"Category":     q.Category,
-		"Region":       q.Region,
-		"Priority":     q.Priority,
-		"Status":       q.Status,
-		"MissingEmail": q.MissingEmail,
-		"Tag":          q.Tag,
-		"Total":        len(s.brokerDB.Brokers),
-		"Filtered":     len(brokers),
-		"DailyLimit":   dailyLimit,
+		"Title":      "Data Brokers",
+		"Brokers":    brokers,
+		"Categories": s.getUniqueCategories(),
+		// The closed disposition vocabulary, read by both the filter
+		// dropdown and the per-row tag select in
+		// partials/broker-list.html. Unlike categories and regions it is
+		// NOT derived from the loaded data: it is mostly unpopulated, so
+		// deriving it would leave the filter empty until something happened
+		// to be tagged - exactly when you most want to check that nothing
+		// is. Not called "Tags": inside {{range .Brokers}} that name means
+		// one broker's own tags.
+		"DispositionTags": broker.DispositionTags,
+		"Regions":         s.getUniqueRegions(),
+		"Priorities":      broker.Priorities,
+		"Search":          q.Search,
+		"Category":        q.Category,
+		"Region":          q.Region,
+		"Priority":        q.Priority,
+		"Status":          q.Status,
+		"MissingEmail":    q.MissingEmail,
+		"Tag":             q.Tag,
+		"NonSendable":     q.NonSendable,
+		"Total":           len(s.getBrokerDB().Brokers),
+		"Filtered":        len(brokers),
+		"DailyLimit":      dailyLimit,
 		// Which request the send button will actually send, and as whom.
 		// Without these the page's one destructive control gave no clue
 		// whether it was about to cite GDPR Article 17 or CCPA.

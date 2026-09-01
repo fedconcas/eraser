@@ -40,7 +40,7 @@ func isBlockedIP(ip net.IP) bool {
 	return false
 }
 
-// guardedTransport returns an http.Transport that refuses to open a
+// GuardedTransport returns an http.Transport that refuses to open a
 // connection to any non-public address.
 //
 // The check lives in Dialer.Control, which the runtime invokes after DNS
@@ -58,7 +58,10 @@ func isBlockedIP(ip net.IP) bool {
 // Proxy is disabled deliberately. With HTTP_PROXY/HTTPS_PROXY set, the only
 // address dialed is the proxy's and the real target travels inside the
 // request, which would silently void the guarantee above.
-func guardedTransport() *http.Transport {
+// It is exported because everything in this codebase that fetches a URL
+// taken from broker data - the audit command's liveness checks, for one -
+// must dial through the same guard, or it reopens the hole described above.
+func GuardedTransport() *http.Transport {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.Proxy = nil
 	tr.DialContext = (&net.Dialer{
@@ -122,7 +125,7 @@ func NewConfirmationHandler(brokerDomains []string) *ConfirmationHandler {
 	return &ConfirmationHandler{
 		client: &http.Client{
 			Timeout:   30 * time.Second,
-			Transport: guardedTransport(),
+			Transport: GuardedTransport(),
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Allow up to 10 redirects. Per-call policy (including the
 				// domain check) is installed in ClickConfirmationLink.
@@ -180,7 +183,7 @@ func (h *ConfirmationHandler) ClickConfirmationLink(confirmURL string, validateD
 	}
 
 	// Set headers to look like a real browser
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 	req.Header.Set("Connection", "keep-alive")

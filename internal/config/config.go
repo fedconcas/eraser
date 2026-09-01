@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/eraser-privacy/eraser/internal/fsutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -419,7 +420,11 @@ func Save(path string, cfg *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to serialize config: %w", err)
 	}
-	return os.WriteFile(path, data, 0600)
+	// Atomic, not a truncating write: the web UI's Exclude button now
+	// rewrites this file - which holds the SMTP and IMAP credentials - on an
+	// ordinary click, and unlike brokers.yaml there is no .bak to fall back
+	// on if the process dies mid-write.
+	return fsutil.WriteFileAtomic(path, data, 0600)
 }
 
 func (c *Config) Validate() error {

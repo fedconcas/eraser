@@ -666,6 +666,7 @@
 
             <!-- Desktop Navigation -->
             <div class="hidden sm:flex items-stretch gap-1 desktop-nav h-full">
+                <a href="/welcome" class="nav-link {{if eq .Title "Start Here"}}active{{end}}">Start Here</a>
                 <a href="/" class="nav-link {{if eq .Title "Dashboard"}}active{{end}}">Dashboard</a>
                 <a href="/brokers" class="nav-link {{if eq .Title "Data Brokers"}}active{{end}}">Brokers</a>
                 <a href="/pipeline" class="nav-link {{if eq .Title "Pipeline"}}active{{end}}">Pipeline</a>
@@ -726,6 +727,7 @@
                     </select>
                 </form>
                 {{end}}
+                <a href="/welcome" class="nav-link-mobile {{if eq .Title "Start Here"}}active{{end}}">Start Here</a>
                 <a href="/" class="nav-link-mobile {{if eq .Title "Dashboard"}}active{{end}}">Dashboard</a>
                 <a href="/brokers" class="nav-link-mobile {{if eq .Title "Data Brokers"}}active{{end}}">Brokers</a>
                 <a href="/pipeline" class="nav-link-mobile {{if eq .Title "Pipeline"}}active{{end}}">Pipeline</a>

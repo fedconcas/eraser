@@ -24,7 +24,7 @@ func templateTestServer(t *testing.T, cfg *config.Config) *Server {
 	if err := config.Save(path, cfg); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	s, err := NewServer(0, cfg, path, &broker.BrokerDatabase{}, nil, eng)
+	s, err := NewServer(0, cfg, path, "", &broker.BrokerDatabase{}, nil, eng)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}

@@ -49,7 +49,7 @@
                 <span class="font-medium text-primary">{{.ProfileName}}</span>
             </span>
             <span class="text-secondary">Emailable in this view:
-                <span class="font-medium text-primary">{{.SendableCount}}</span>
+                <span class="font-medium text-primary" id="sendable-count">{{.SendableCount}}</span>
             </span>
         </div>
         <div class="flex items-center gap-2">
@@ -78,8 +78,15 @@
     <!-- Send progress area -->
     <div id="send-all-progress" class="mb-6"></div>
 
-    <!-- Search and Filters -->
-    <div class="card p-4 mb-6">
+    <!-- Search and Filters.
+         The container carries an id so every control - here and the per-row
+         Tag/Exclude buttons in partials/broker-list.html - can send the whole
+         filter state with hx-include="#broker-filters" (htmx includes every
+         input under the named element, and a control's own value always goes
+         along). Each control used to spell out "every filter except me" as a
+         selector list; a filter missed from one of those 15 copies silently
+         reset itself whenever that one control was used. -->
+    <div id="broker-filters" class="card p-4 mb-6">
         <div class="flex flex-col md:flex-row gap-4">
             <!-- Search Input -->
             <div class="flex-1 relative">
@@ -96,7 +103,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="keyup changed delay:300ms"
                     hx-target="#broker-list"
-                    hx-include="[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
+                    hx-include="#broker-filters"
                 >
             </div>
 
@@ -108,7 +115,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='category'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
+                    hx-include="#broker-filters"
                 >
                     <option value="">All Statuses</option>
                     <option value="pending" {{if eq $.Status "pending"}}selected{{end}}>Pending</option>
@@ -121,7 +128,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='priority'],[name='region'],[name='missing_email'],[name='tag']"
+                    hx-include="#broker-filters"
                 >
                     <option value="">All Categories</option>
                     {{range .Categories}}
@@ -134,10 +141,10 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='missing_email']"
+                    hx-include="#broker-filters"
                 >
                     <option value="">All Dispositions</option>
-                    {{range .Tags}}
+                    {{range .DispositionTags}}
                     <option value="{{.}}" {{if eq . $.Tag}}selected{{end}}>{{.}}</option>
                     {{end}}
                 </select>
@@ -147,7 +154,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='category'],[name='region'],[name='missing_email'],[name='tag']"
+                    hx-include="#broker-filters"
                 >
                     <option value="">All Priorities</option>
                     {{range .Priorities}}
@@ -160,7 +167,7 @@
                     hx-get="/api/brokers"
                     hx-trigger="change"
                     hx-target="#broker-list"
-                    hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='missing_email'],[name='tag']"
+                    hx-include="#broker-filters"
                 >
                     <option value="">All Regions</option>
                     {{range .Regions}}
@@ -176,9 +183,26 @@
                         hx-get="/api/brokers"
                         hx-trigger="change"
                         hx-target="#broker-list"
-                        hx-include="#broker-search,[name='status'],[name='category'],[name='priority'],[name='region'],[name='tag']"
+                        hx-include="#broker-filters"
                     >
                     Missing email only
+                </label>
+                <!-- Opt-in to everything the default view hides: brokers
+                     marked b2b-only / us-data-only / form-only, brokers with
+                     no address on file, and brokers you excluded yourself
+                     (those rows carry an Include button to undo it). -->
+                <label class="flex items-center gap-2 text-sm text-secondary select-none cursor-pointer whitespace-nowrap">
+                    <input
+                        type="checkbox"
+                        name="non_sendable"
+                        value="true"
+                        {{if .NonSendable}}checked{{end}}
+                        hx-get="/api/brokers"
+                        hx-trigger="change"
+                        hx-target="#broker-list"
+                        hx-include="#broker-filters"
+                    >
+                    Include non-sendable
                 </label>
             </div>
         </div>
@@ -211,15 +235,16 @@ let lastSeenBrokerId = null;
 // the table to "all brokers" the moment a send job finished - so a run
 // started from "high priority, pending" came back showing everything.
 function currentFilters() {
-    return {
-        search: document.getElementById('broker-search').value,
-        status: document.querySelector('[name="status"]').value,
-        category: document.querySelector('[name="category"]').value,
-        priority: document.querySelector('[name="priority"]').value,
-        region: document.querySelector('[name="region"]').value,
-        tag: document.querySelector('[name="tag"]').value,
-        missing_email: document.querySelector('[name="missing_email"]').checked ? 'true' : ''
-    };
+    // Read whatever is in the filter bar rather than naming each control:
+    // the same single source the hx-include="#broker-filters" attributes
+    // use, so a filter added to the markup is picked up here for free
+    // instead of silently dropping out of these refreshes.
+    const filters = {};
+    for (const el of document.querySelectorAll('#broker-filters [name]')) {
+        const on = el.type !== 'checkbox' && el.type !== 'radio' || el.checked;
+        filters[el.name] = on ? el.value : '';
+    }
+    return filters;
 }
 
 function refreshBrokerList() {
