@@ -75,7 +75,7 @@ Two gates have to agree before an address is touched, and the asymmetry is delib
 1. `ClassifyResponse` says `ResponseBounced` - this is a delivery failure at all.
 2. `inbox.IsHardBounce` says the failure is *permanent*: a 5.x.x enhanced status code, a 5xx reply code, or wording naming the recipient as unknown - **and no transient signal anywhere in the message**. A full mailbox, a greylisting deferral or a "will retry" veto the verdict outright, because clearing a live broker's address on a temporary failure would drop it out of every future send with nothing to put it back.
 
-The broker itself is never deleted - `broker.MarkEmailUnreachable` clears `email` and records the dropped address and the bounce wording in `Notes`. The entry keeps its name, category, website and `opt_out_url`, still appears under "Include non-sendable" and in `list-brokers --missing-email`, and can be given a working address later. (Note `cleanup-bounces --remove` on the CLI still *deletes* the whole entry via `RemoveByEmail` - the older, blunter behaviour. Worth reconciling.)
+The broker itself is never deleted - `broker.MarkEmailUnreachable` clears `email` and records the dropped address and the bounce wording in `Notes`. The entry keeps its name, category, website and `opt_out_url`, still appears under "Include non-sendable" and in `list-brokers --missing-email`, and can be given a working address later. `cleanup-bounces --remove` on the CLI goes through the same helper and the same hard-bounce gate (it used to *delete* the whole entry via `RemoveByEmail`, which is now gone); it additionally reports the transient failures it left alone, so "nothing happened" is never silent.
 
 ## Broker IDs are join keys into history.db
 

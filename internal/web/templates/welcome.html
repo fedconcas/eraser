@@ -14,63 +14,95 @@
         </p>
     </div>
 
-    <!-- The two audiences -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- The two audiences. Stacked rather than side by side: the EU/UK half
+         carries the case-law notes that belong to it, so the two are not the
+         same height and never will be. -->
 
-        <!-- EU / UK -->
-        <div class="card p-6">
-            <h2 class="font-display text-xl font-semibold text-primary mb-1">If you are in the EU or the UK</h2>
-            <p class="text-sm text-muted mb-4">GDPR Article 17 &middot; UK GDPR</p>
+    <!-- EU / UK -->
+    <div class="card p-6 mb-6">
+        <h2 class="font-display text-xl font-semibold text-primary mb-1">If you are in the EU or the UK</h2>
+        <p class="text-sm text-muted mb-4">GDPR Article 17 &middot; UK GDPR</p>
 
-            <p class="text-secondary mb-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
+            <p class="text-secondary">
                 Your position is the strong one. Erasure is a right, not a favour: the request is free,
                 the company has one month to answer, and "we would rather not" is not an answer. Every
                 request this tool sends on your behalf cites that right explicitly.
             </p>
-            <p class="text-secondary mb-4">
+            <p class="text-secondary">
                 The catch is that most of these companies probably hold no file with your name on it.
                 What circulates about you is mostly <strong>hashed</strong> - your email address run through
                 a one-way function, then matched against advertising IDs, device graphs and household
                 clusters. Nobody in that chain needs to know you are you; they only need the same hash to
                 keep turning up.
             </p>
-            <p class="text-secondary">
-                That is why a letter to every marketing company in the list is not the best first move.
-                The hashes are only useful because a <strong>small number of companies do the joining</strong>.
-                Start with them - the list below - and you cut off far more than you would by writing to a
-                hundred companies that never knew your name.
-            </p>
         </div>
+        <p class="text-secondary mt-4">
+            That is why a letter to every marketing company in the list is not the best first move.
+            The hashes are only useful because a <strong>small number of companies do the joining</strong>.
+            Start with them - <a href="#joiners" class="text-[var(--accent)] hover:underline">the list below</a> -
+            and you cut off far more than you would by writing to a hundred companies that never knew your name.
+        </p>
 
-        <!-- USA -->
-        <div class="card p-6">
-            <h2 class="font-display text-xl font-semibold text-primary mb-1">If you are in the United States</h2>
-            <p class="text-sm text-muted mb-4">State privacy laws &middot; CCPA/CPRA &middot; FCRA</p>
+        <!-- Case law: both of these are EU/UK matters, so they live here. -->
+        <div class="mt-6 pt-6 border-t" style="border-color: var(--border);">
+            <h3 class="font-display text-base font-semibold text-primary mb-4">Where the law currently stands</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-secondary text-sm">
+                <div>
+                    <h4 class="font-medium text-primary mb-2">Consent strings are personal data</h4>
+                    <p>
+                        In 2022 the Belgian data protection authority found IAB Europe's Transparency and Consent
+                        Framework - the consent pop-up standard behind most of the ad industry - in breach of the
+                        GDPR, holding that the "TC String" recording your choices is itself personal data and that
+                        IAB Europe acts as a joint controller for it. An action plan was approved in 2023; appeals
+                        have run alongside it. The practical point for you: consent captured through those banners
+                        is contested ground, not settled permission.
+                    </p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-primary mb-2">"Legitimate interest" is allowed, but not unlimited</h4>
+                    <p>
+                        In February 2023 a UK tribunal largely overturned the ICO's enforcement notice against
+                        Experian, accepting that legitimate interest can be a lawful basis for direct marketing. It
+                        also rejected Experian's argument that telling millions of people their data was being
+                        processed was too expensive to be proportionate - cost is not a defence against the duty to
+                        inform. Both halves matter when a company answers your request by citing legitimate interest.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            <p class="text-secondary mb-4">
+    <!-- USA -->
+    <div class="card p-6 mb-8">
+        <h2 class="font-display text-xl font-semibold text-primary mb-1">If you are in the United States</h2>
+        <p class="text-sm text-muted mb-4">State privacy laws &middot; CCPA/CPRA &middot; FCRA</p>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
+            <p class="text-secondary">
                 There is no single federal right to erasure. What you have instead is a growing patchwork of
                 <strong>state</strong> laws - California, Colorado, Connecticut, Virginia, Texas, Oregon and
                 more each year - most of which give residents the right to have personal data deleted and to
                 opt out of its sale or sharing. California residents have the strongest version, and its
                 registry of data brokers is the reason so many of the companies in this tool are listed at all.
             </p>
-            <p class="text-secondary mb-4">
+            <p class="text-secondary">
                 The difference from Europe is that here these companies very likely <em>do</em> hold a file on
                 you by name: address history, household composition, income bracket, purchase behaviour,
                 inferred interests. The people-search sites that publish your address are the most visible
                 end of it, and the ones most worth clearing first.
             </p>
-            <p class="text-secondary">
-                Two things a deletion request will <em>not</em> do: it will not erase your credit file at
-                Experian, Equifax or TransUnion (that is governed separately by the FCRA - you can opt out of
-                prescreened offers, but the file itself stays), and it will not stop the hash-matching described
-                on the left. For that, the same list below applies to you too.
-            </p>
         </div>
+        <p class="text-secondary mt-4">
+            Two things a deletion request will <em>not</em> do: it will not erase your credit file at
+            Experian, Equifax or TransUnion (that is governed separately by the FCRA - you can opt out of
+            prescreened offers, but the file itself stays), and it will not stop the hash-matching described
+            above. For that, the same list below applies to you too.
+        </p>
     </div>
 
     <!-- Identity resolvers -->
-    <div class="card p-6 mb-8">
+    <div id="joiners" class="card p-6 mb-8">
         <h2 class="font-display text-xl font-semibold text-primary mb-1">The companies that do the joining</h2>
         <p class="text-secondary mb-5 max-w-3xl">
             These are the identity-resolution firms: the ones that turn a hashed email into a durable ID and
@@ -117,34 +149,6 @@
         {{else}}
         <p class="text-secondary">No identity-resolution companies are present in the loaded broker database.</p>
         {{end}}
-    </div>
-
-    <!-- Context -->
-    <div class="card p-6 mb-8">
-        <h2 class="font-display text-xl font-semibold text-primary mb-4">Where the law currently stands</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-secondary">
-            <div>
-                <h3 class="font-medium text-primary mb-2">Consent strings are personal data</h3>
-                <p>
-                    In 2022 the Belgian data protection authority found IAB Europe's Transparency and Consent
-                    Framework - the consent pop-up standard behind most of the ad industry - in breach of the
-                    GDPR, holding that the "TC String" recording your choices is itself personal data and that
-                    IAB Europe acts as a joint controller for it. An action plan was approved in 2023; appeals
-                    have run alongside it. The practical point for you: consent captured through those banners
-                    is contested ground, not settled permission.
-                </p>
-            </div>
-            <div>
-                <h3 class="font-medium text-primary mb-2">"Legitimate interest" is allowed, but not unlimited</h3>
-                <p>
-                    In February 2023 a UK tribunal largely overturned the ICO's enforcement notice against
-                    Experian, accepting that legitimate interest can be a lawful basis for direct marketing. It
-                    also rejected Experian's argument that telling millions of people their data was being
-                    processed was too expensive to be proportionate - cost is not a defence against the duty to
-                    inform. Both halves matter when a company answers your request by citing legitimate interest.
-                </p>
-            </div>
-        </div>
     </div>
 
     <!-- Next step -->

@@ -508,20 +508,6 @@ func (db *BrokerDatabase) FindByEmail(email string) *Broker {
 	return nil
 }
 
-// RemoveByEmail removes a broker by their email address
-// Returns the removed broker, or nil if not found
-func (db *BrokerDatabase) RemoveByEmail(email string) *Broker {
-	email = strings.ToLower(email)
-	for i := range db.Brokers {
-		if strings.ToLower(db.Brokers[i].Email) == email {
-			removed := db.Brokers[i]
-			db.Brokers = append(db.Brokers[:i], db.Brokers[i+1:]...)
-			return &removed
-		}
-	}
-	return nil
-}
-
 // RemoveByID removes a broker by their ID
 // Returns the removed broker, or nil if not found
 func (db *BrokerDatabase) RemoveByID(id string) *Broker {

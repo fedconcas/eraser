@@ -16,7 +16,7 @@ go test ./...
 ./eraser status [--limit 50]
 ./eraser add-broker
 ./eraser mark-bounced <broker-id>...   # correct the record when an email actually bounced
-./eraser cleanup-bounces               # find + clear bounced broker emails
+./eraser cleanup-bounces [--remove]    # clear broker addresses that permanently bounced
 ./eraser monitor                       # IMAP inbox monitoring for broker replies
 ./eraser pipeline                      # which brokers need manual follow-up
 ./eraser confirm                       # click confirmation links from broker emails
