@@ -215,16 +215,20 @@ func UnattributedName(brokerID string) string {
 //     broker addresses; classifying them here would file them away and
 //     silently break that.
 //
-// The request subject is only load-bearing for rule 4 and the final
-// unattributed fallback, not for rules 2-3. A ticketing platform rewrites the
-// subject on most of the messages a ticket produces - a satisfaction survey,
-// "ticket updated", a follow-up - and quotes it faithfully only on the very
-// first auto-acknowledgement, if that. Gating the helpdesk-tenant and
-// subdomain rules behind a subject match left them firing on close to nothing
-// against a live account: helpdesk tenant slug or contacted-domain-subdomain
-// is already exact, private-state evidence (an outsider can't know which
-// brokers this install wrote to), same strength as rule 1's domain match,
-// and needs no corroboration from subject text.
+// quotesOurRequest (subject or body fingerprint) is only load-bearing for
+// rule 4 and the final unattributed fallback, not for rules 2-3b. A ticketing
+// platform rewrites the subject on most of the messages a ticket produces - a
+// satisfaction survey, "ticket updated", a follow-up - and quotes it
+// faithfully only on the very first auto-acknowledgement, if that; a message
+// that echoes what it answers (a Gmail conversation thread, a support
+// system's "in reply to" quote) may still carry the body fingerprint even
+// then. Gating the helpdesk-tenant, subdomain and platform-sender-name rules
+// behind this match left them firing on close to nothing against a live
+// account: helpdesk tenant slug, contacted-domain-subdomain or a contacted
+// broker's own domain root in the sender name is already exact,
+// private-state evidence (an outsider can't know which brokers this install
+// wrote to), same strength as rule 1's domain match, and needs no
+// corroboration from subject or body text.
 func (m *Monitor) matchReply(email *Email) ReplyMatch {
 	// Rule 1: sender domain resolves to a broker, as before.
 	if email.FromDomain != "" {
@@ -271,7 +275,7 @@ func (m *Monitor) matchReply(email *Email) ReplyMatch {
 		return ReplyMatch{BrokerID: id, Attributed: true, Via: "privacy-platform sender name"}
 	}
 
-	if !m.subjectLooksLikeOurRequest(email.Subject) {
+	if !m.quotesOurRequest(email) {
 		return ReplyMatch{}
 	}
 
@@ -297,7 +301,7 @@ func (m *Monitor) matchReply(email *Email) ReplyMatch {
 
 	// A genuine reply we can't pin down. Worth recording and surfacing, but
 	// not worth treating as identified.
-	return ReplyMatch{BrokerID: unattributedID(email.FromDomain), Via: "request subject"}
+	return ReplyMatch{BrokerID: unattributedID(email.FromDomain), Via: "request subject or body"}
 }
 
 // subjectLooksLikeOurRequest reports whether a subject quotes one of the
@@ -309,6 +313,35 @@ func (m *Monitor) subjectLooksLikeOurRequest(subject string) bool {
 	s := strings.ToLower(subject)
 	for _, want := range m.requestSubjects {
 		if strings.Contains(s, want) {
+			return true
+		}
+	}
+	return false
+}
+
+// quotesOurRequest reports whether a message quotes one of the request
+// subjects or request body fingerprints this install actually sends - either
+// is sufficient on its own. A ticketing system rewrites the subject on most
+// of a ticket's messages, but a reply that echoes the message it answers (a
+// Gmail conversation thread, a support system quoting "in reply to") still
+// carries the fixed opening sentence of our own template in its body, even
+// when its subject has been rewritten to something unrecognisable.
+func (m *Monitor) quotesOurRequest(email *Email) bool {
+	if m.subjectLooksLikeOurRequest(email.Subject) {
+		return true
+	}
+	if len(m.requestBodyFingerprints) == 0 {
+		return false
+	}
+	body := strings.ToLower(email.Body)
+	if html := stripHTMLSimple(email.HTMLBody); html != "" {
+		body += " " + strings.ToLower(html)
+	}
+	if body == "" {
+		return false
+	}
+	for _, want := range m.requestBodyFingerprints {
+		if strings.Contains(body, want) {
 			return true
 		}
 	}

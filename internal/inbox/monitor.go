@@ -51,6 +51,15 @@ type Monitor struct {
 	// install has sent. A message quoting one is a reply to us. Empty means
 	// subject-based matching is off.
 	requestSubjects []string
+	// requestBodyFingerprints are the lowercased fixed sentences (one per
+	// template) that appear in every request this install has sent,
+	// regardless of profile or recipient. A ticketing system may rewrite the
+	// subject on most of a ticket's messages, but a reply that echoes the
+	// message it answers - a Gmail conversation thread, a support system's
+	// "in reply to" quote - still carries this in its quoted body. Checked
+	// alongside requestSubjects, never instead of it: a message need only
+	// quote one or the other. Empty means fingerprint matching is off.
+	requestBodyFingerprints []string
 }
 
 // Email represents a parsed email from a broker
@@ -741,22 +750,35 @@ func (m *Monitor) folderExists(name string) (bool, error) {
 func (m *Monitor) SetContactedBrokers(ids map[string]bool) {
 	m.contacted = ids
 
-	// Index them by normalized ID and name so a helpdesk tenant label can be
-	// resolved. Built here rather than per-message: the broker list is large
-	// and the set only changes when the gate does.
+	// Index them by normalized ID, name, reply-name alias and the broker's
+	// own domain root so a helpdesk tenant label can be resolved. The domain
+	// root usually needs no explicit alias at all: a Zendesk tenant slug is
+	// typically just the company's own domain name (publicdatacheck.zendesk.com
+	// for a broker contacted at publicdatacheck.com) - ReplyNames is only for
+	// the rarer case a reply names something the domain can't cover either (a
+	// parent company). Built here rather than per-message: the broker list is
+	// large and the set only changes when the gate does.
 	m.contactedSlugs = make(map[string]string, len(ids)*2)
-	for _, b := range m.brokers {
+	addSlug := func(raw string, minLen int, id string) {
+		slug := normalizeSlug(raw)
+		if len(slug) < minLen {
+			return
+		}
+		// Don't let a shorter or later collision silently reassign an
+		// existing match.
+		if _, taken := m.contactedSlugs[slug]; !taken {
+			m.contactedSlugs[slug] = id
+		}
+	}
+	for domain, b := range m.brokers {
 		if ids != nil && !ids[b.ID] {
 			continue
 		}
-		if slug := normalizeSlug(b.ID); slug != "" {
-			m.contactedSlugs[slug] = b.ID
-		}
-		if slug := normalizeSlug(b.Name); slug != "" {
-			// Don't let a name collision silently reassign an ID match.
-			if _, taken := m.contactedSlugs[slug]; !taken {
-				m.contactedSlugs[slug] = b.ID
-			}
+		addSlug(b.ID, 1, b.ID)
+		addSlug(b.Name, 1, b.ID)
+		addSlug(domainRoot(domain), 5, b.ID)
+		for _, alias := range b.ReplyNames {
+			addSlug(alias, 1, b.ID)
 		}
 	}
 }
@@ -776,6 +798,17 @@ func (m *Monitor) SetRequestSubjects(subjects []string) {
 	for _, s := range subjects {
 		if s = strings.ToLower(strings.TrimSpace(s)); s != "" {
 			m.requestSubjects = append(m.requestSubjects, s)
+		}
+	}
+}
+
+// SetRequestBodyFingerprints enables body-based reply matching for the given
+// fingerprint sentences (see template.RequestBodyFingerprints).
+func (m *Monitor) SetRequestBodyFingerprints(fingerprints []string) {
+	m.requestBodyFingerprints = m.requestBodyFingerprints[:0]
+	for _, f := range fingerprints {
+		if f = strings.ToLower(strings.TrimSpace(f)); f != "" {
+			m.requestBodyFingerprints = append(m.requestBodyFingerprints, f)
 		}
 	}
 }

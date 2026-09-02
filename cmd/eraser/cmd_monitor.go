@@ -97,12 +97,14 @@ func runMonitor(days int, once bool, watch bool, dryRun bool) error {
 	monitor.SetContactedBrokers(contacted)
 
 	// Recognise replies that arrive from a helpdesk tenant or parent company
-	// by the request subject they quote, and attribute them by the address we
-	// originally wrote to. Both derived from what was actually sent.
+	// by the request subject or body fingerprint they quote, and attribute
+	// them by the address we originally wrote to. All derived from what was
+	// actually sent.
 	if templates, err := store.SentTemplates(); err != nil {
-		fmt.Printf("⚠️  Could not load sent templates, subject-based reply matching disabled: %v\n", err)
+		fmt.Printf("⚠️  Could not load sent templates, subject/body-based reply matching disabled: %v\n", err)
 	} else {
 		monitor.SetRequestSubjects(emaTemplate.RequestSubjects(templates))
+		monitor.SetRequestBodyFingerprints(emaTemplate.RequestBodyFingerprints(templates))
 	}
 	if addrs, err := store.ContactedBrokerAddresses(); err != nil {
 		fmt.Printf("⚠️  Could not load contacted addresses: %v\n", err)

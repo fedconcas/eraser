@@ -190,6 +190,56 @@ func RequestSubjects(templateNames []string) []string {
 	return subjects
 }
 
+// RequestBodyFingerprintFor returns a sentence from this template's body
+// that never varies by recipient or sender profile - present in every
+// request sent with it, quoted back verbatim in most replies that echo the
+// message they're answering (a support-ticket auto-ack, a forwarded copy in
+// a Gmail conversation thread). Complements RequestSubjectFor: a reply whose
+// subject was rewritten by a ticketing system may still carry this in its
+// quoted body.
+//
+// Every template's first paragraph opens with "To ... {{.BrokerName}},",
+// which does vary; this is the fixed sentence right after it.
+func RequestBodyFingerprintFor(templateName string) string {
+	switch templateName {
+	case "gdpr":
+		return "I am writing to exercise my right to erasure under Article 17 of the General Data Protection Regulation (GDPR)."
+	case "ccpa":
+		return "I am a California resident writing to exercise my rights under the California Consumer Privacy Act (CCPA) and the California Privacy Rights Act (CPRA)."
+	case "uk-access":
+		return "I am writing to make a subject access request under Article 15 of the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018."
+	case "uk-erasure":
+		return "I am writing to exercise my right to erasure under Article 17 of the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018."
+	case "uk-combined":
+		return "I am writing to exercise two rights under the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018."
+	default:
+		return GenericRequestBodyFingerprint
+	}
+}
+
+// GenericRequestBodyFingerprint is the fallback, used by the `generic`
+// template and by any unrecognised name. Weak for the same reason
+// GenericRequestSubject is - ordinary wording a newsletter could contain -
+// which is why the matcher only enables it for an install that actually
+// sends the generic template.
+const GenericRequestBodyFingerprint = "I am writing to request the removal of my personal information from your database and any associated services."
+
+// RequestBodyFingerprints returns the body fingerprints for the named
+// templates, skipping duplicates and unknown names.
+func RequestBodyFingerprints(templateNames []string) []string {
+	seen := make(map[string]bool, len(templateNames))
+	var fingerprints []string
+	for _, name := range templateNames {
+		f := RequestBodyFingerprintFor(name)
+		if seen[f] {
+			continue
+		}
+		seen[f] = true
+		fingerprints = append(fingerprints, f)
+	}
+	return fingerprints
+}
+
 // RequestTypeFor reports which right a template exercises. Unknown templates
 // are treated as erasure: every template that shipped before request types
 // existed was a deletion request, and existing history rows default to the
