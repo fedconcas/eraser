@@ -264,6 +264,110 @@ func TestHelpdeskAndSubdomainMatchWithoutQuotingOurSubject(t *testing.T) {
 	}
 }
 
+// TestPrivacyPlatformSenderNameAttribution pins a second live-account miss,
+// distinct from the helpdesk-tenant case: OneTrust sends every client's
+// notifications from the same noreply@m.onetrust.com regardless of which
+// broker it's for, so neither sender-domain nor subdomain matching can ever
+// see it. The client is named only in the display name, and not always by
+// the name the broker is recorded under - "Equimine" in the database, "On
+// behalf of PropStream" in the notification, both routed through
+// propstream.com.
+func TestPrivacyPlatformSenderNameAttribution(t *testing.T) {
+	brokers := []broker.Broker{
+		{ID: "equimine", Name: "Equimine", Email: "privacyinquiry@propstream.com"},
+		{ID: "lightcast", Name: "Lightcast", Email: "legal@lightcast.io"},
+		{ID: "acuant", Name: "Acuant, Inc.", Email: "compliance@gbgplc.com", ReplyNames: []string{"GBG"}},
+	}
+	m := NewMonitor(config.InboxConfig{Email: "fedconcas@gmail.com"}, brokers)
+	m.SetContactedBrokers(map[string]bool{"equimine": true, "lightcast": true, "acuant": true})
+
+	tests := []struct {
+		name       string
+		fromName   string
+		wantBroker string
+	}{
+		{"brand name differs from the broker's recorded name", "On behalf of PropStream", "equimine"},
+		{"display name is literally the address the broker gave the platform", "privacy@lightcast.io", "lightcast"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			email := &Email{
+				From: "noreply@m.onetrust.com", FromName: tt.fromName, FromDomain: "m.onetrust.com",
+				Subject: "(Request ID: N4GW552JCR) Your Privacy Request",
+			}
+			got := m.matchReply(email)
+			if !got.Attributed || got.BrokerID != tt.wantBroker {
+				t.Errorf("expected attribution to %q, got %q (attributed=%v, via=%s)",
+					tt.wantBroker, got.BrokerID, got.Attributed, got.Via)
+			}
+		})
+	}
+
+	t.Run("a parent company's brand resolves via ReplyNames", func(t *testing.T) {
+		// GBG's own template names the parent company, not Acuant - nothing
+		// about that relationship is derivable from the broker's own domain
+		// or name, so it has to be recorded explicitly (see the acuant
+		// broker's reply_names above).
+		email := &Email{
+			From: "noreply@m.onetrust.com", FromName: "GBG Privacy and Data Compliance Team", FromDomain: "m.onetrust.com",
+			Subject: "(Request ID: N2TNMC8BKF) Request logged successfully",
+		}
+		got := m.matchReply(email)
+		if !got.Attributed || got.BrokerID != "acuant" {
+			t.Errorf("expected attribution to acuant via ReplyNames, got %q (attributed=%v, via=%s)",
+				got.BrokerID, got.Attributed, got.Via)
+		}
+	})
+
+	t.Run("a parent-company brand absent from ReplyNames stays unattributed", func(t *testing.T) {
+		email := &Email{
+			From: "noreply@m.onetrust.com", FromName: "Some Unrelated Parent Co", FromDomain: "m.onetrust.com",
+			Subject: "Your ticket has been updated",
+		}
+		got := m.matchReply(email)
+		if got.Attributed {
+			t.Errorf("expected no confident attribution, got %q via %s", got.BrokerID, got.Via)
+		}
+	})
+
+	t.Run("not gated on the request subject, like the other domain-evidence rules", func(t *testing.T) {
+		email := &Email{
+			From: "noreply@m.onetrust.com", FromName: "On behalf of PropStream", FromDomain: "m.onetrust.com",
+			Subject: "Your ticket has been updated", // never quotes our request text
+		}
+		got := m.matchReply(email)
+		if !got.Attributed || got.BrokerID != "equimine" {
+			t.Errorf("got %+v, want attributed to equimine regardless of subject", got)
+		}
+	})
+
+	t.Run("only applies to a known privacy-platform sender domain", func(t *testing.T) {
+		email := &Email{
+			From: "billing@propstream-invoices.example", FromName: "On behalf of PropStream",
+			FromDomain: "propstream-invoices.example",
+			Subject:    "Your ticket has been updated",
+		}
+		got := m.matchReply(email)
+		if got.BrokerID != "" {
+			t.Errorf("an ordinary sender must not be attributed by display name alone, got %q", got.BrokerID)
+		}
+	})
+
+	t.Run("a short or generic root does not match", func(t *testing.T) {
+		short := NewMonitor(config.InboxConfig{Email: "fedconcas@gmail.com"}, []broker.Broker{
+			{ID: "cb", Name: "CB Inc", Email: "privacy@cb.io"},
+		})
+		short.SetContactedBrokers(map[string]bool{"cb": true})
+		email := &Email{
+			From: "noreply@m.onetrust.com", FromName: "On behalf of Bob's Cabinets", FromDomain: "m.onetrust.com",
+			Subject: "Your ticket has been updated",
+		}
+		if got := short.matchReply(email); got.Attributed {
+			t.Errorf("a 2-letter domain root must not attribute, got %q", got.BrokerID)
+		}
+	})
+}
+
 // Subject matching must not become a way around the sender filtering that was
 // added to stop ordinary mail being classified as broker replies.
 func TestSubjectMatchingDoesNotBypassSenderGuards(t *testing.T) {

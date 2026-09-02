@@ -325,6 +325,15 @@ type Broker struct {
 	// subdomain rule can't reach). Used only for inbox reply matching; never
 	// sent to.
 	ReplyDomains []string `yaml:"reply_domains,omitempty"`
+	// ReplyNames are other brands this broker is known to reply under - a
+	// parent company's name, when a reply names the parent rather than this
+	// entity (e.g. Acuant, Inc. is recorded here under its own name, but its
+	// privacy team replies as "GBG Privacy and Data Compliance Team" - GBG
+	// being the parent, a name that appears nowhere else in this record).
+	// Used only for inbox reply matching, e.g. a shared privacy-request
+	// platform that names the client only in the sender display name, not
+	// the sending domain; never sent to.
+	ReplyNames []string `yaml:"reply_names,omitempty"`
 }
 
 type BrokerDatabase struct {
