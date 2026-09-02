@@ -7,6 +7,7 @@ import (
 	"github.com/emersion/go-imap"
 	"github.com/eraser-privacy/eraser/internal/broker"
 	"github.com/eraser-privacy/eraser/internal/config"
+	emaTemplate "github.com/eraser-privacy/eraser/internal/template"
 )
 
 const ukAccessSubject = "Subject Access Request - Article 15 UK GDPR"
@@ -455,6 +456,76 @@ func TestHelpdeskTenant(t *testing.T) {
 				tt.domain, gotTenant, gotOK, tt.wantTenant, tt.wantOK)
 		}
 	}
+}
+
+// TestHelpdeskTenantResolvesFromBrokersOwnDomainRoot pins a live-account
+// miss: National Data Analytics, LLC (contacted at publicdatacheck.com)
+// replies from privacyinfo@publicdatacheck.zendesk.com. Its own domain root
+// already equals the tenant slug, so this needs no explicit ReplyNames alias
+// at all - SetContactedBrokers indexes it automatically.
+func TestHelpdeskTenantResolvesFromBrokersOwnDomainRoot(t *testing.T) {
+	m := NewMonitor(config.InboxConfig{Email: "fedconcas@gmail.com"}, []broker.Broker{
+		{ID: "national-data-analytics", Name: "National Data Analytics, LLC", Email: "privacyinfo@publicdatacheck.com"},
+	})
+	m.SetContactedBrokers(map[string]bool{"national-data-analytics": true})
+
+	got := parseFull(t, m, "privacyinfo@publicdatacheck.zendesk.com", "Privacy Request", "Thank you for contacting us about your privacy request.")
+	if !got.Attributed || got.BrokerID != "national-data-analytics" {
+		t.Errorf("expected attribution to national-data-analytics via its own domain root, got %q (attributed=%v, via=%s)",
+			got.BrokerID, got.Attributed, got.MatchedVia)
+	}
+}
+
+// TestBodyFingerprintMatchesWhenSubjectIsRewritten pins the general
+// principle behind the case above: a message that quotes the fixed opening
+// sentence of a template this install actually sent - present in every
+// Gmail conversation thread whether or not the subject was rewritten -
+// counts as a genuine reply on its own, the same way a subject match does.
+// Uses a sender with no domain-based evidence at all (not a broker's own
+// domain, not a helpdesk tenant, not a subdomain), so the fingerprint is
+// doing all the work.
+func TestBodyFingerprintMatchesWhenSubjectIsRewritten(t *testing.T) {
+	fingerprint := emaTemplate.RequestBodyFingerprints([]string{"uk-access"})
+	quotedThread := "Thank you for contacting us.\r\n\r\n" +
+		"> To the Data Protection Officer at Freewheel Media Inc,\r\n" +
+		"> I am writing to make a subject access request under Article 15 of the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018. I am a UK resident."
+
+	t.Run("recognised as a genuine reply, unattributed, when there's no address to pin it to", func(t *testing.T) {
+		m := liveMonitor(t)
+		m.SetRequestBodyFingerprints(fingerprint)
+		got := parseFull(t, m, "support@thirdpartyhelpcenter.example", "Case #4471 opened", quotedThread)
+		if got.Attributed || !IsUnattributed(got.BrokerID) {
+			t.Errorf("expected an unattributed match, got %q (attributed=%v, via=%s)", got.BrokerID, got.Attributed, got.MatchedVia)
+		}
+	})
+
+	t.Run("attributed when the same body also quotes an address we wrote to", func(t *testing.T) {
+		m := liveMonitor(t)
+		m.SetRequestBodyFingerprints(fingerprint)
+		withAddress := quotedThread + "\r\n\r\n(sent to legalnotices@freewheel.com)"
+		got := parseFull(t, m, "support@thirdpartyhelpcenter.example", "Case #4471 opened", withAddress)
+		if !got.Attributed || got.BrokerID != "freewheel-media" {
+			t.Errorf("expected attribution to freewheel-media, got %q (attributed=%v, via=%s)", got.BrokerID, got.Attributed, got.MatchedVia)
+		}
+	})
+
+	t.Run("a subject match alone is still enough - fingerprints don't replace it", func(t *testing.T) {
+		m := liveMonitor(t)
+		m.SetRequestBodyFingerprints(nil)
+		got := parseFull(t, m, "1746136851@tickets.helpdesk.com", "Re: "+ukAccessSubject, "no body content")
+		if got.BrokerID == "" {
+			t.Error("subject-only matching regressed when body fingerprints are unset")
+		}
+	})
+
+	t.Run("ordinary mail with neither signal is untouched", func(t *testing.T) {
+		m := liveMonitor(t)
+		m.SetRequestBodyFingerprints(fingerprint)
+		got := parseFull(t, m, "hello@newsletter.example", "Our weekly roundup", "nothing relevant here")
+		if got.BrokerID != "" {
+			t.Errorf("ordinary mail matched %q", got.BrokerID)
+		}
+	})
 }
 
 func TestParentDomain(t *testing.T) {

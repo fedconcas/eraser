@@ -148,13 +148,15 @@ func (s *Server) applyContactedBrokerGate(monitor *inbox.Monitor) {
 	}
 	monitor.SetContactedBrokers(contacted)
 
-	// Subject-based reply matching, so brokers answering from a helpdesk
-	// tenant are recognised. Both inputs come from what was actually sent:
-	// the subjects of templates we used, and the addresses we wrote to.
+	// Subject- and body-based reply matching, so brokers answering from a
+	// helpdesk tenant are recognised. Both inputs come from what was
+	// actually sent: the subjects and body fingerprints of templates we
+	// used, and the addresses we wrote to.
 	if templates, err := s.historyStore.SentTemplates(); err != nil {
-		log.Printf("Warning: could not load sent templates, subject-based reply matching disabled: %v", err)
+		log.Printf("Warning: could not load sent templates, subject/body-based reply matching disabled: %v", err)
 	} else {
 		monitor.SetRequestSubjects(emaTemplate.RequestSubjects(templates))
+		monitor.SetRequestBodyFingerprints(emaTemplate.RequestBodyFingerprints(templates))
 	}
 	if addrs, err := s.historyStore.ContactedBrokerAddresses(); err != nil {
 		log.Printf("Warning: could not load contacted addresses, replies from helpdesk domains may go unattributed: %v", err)

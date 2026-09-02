@@ -326,13 +326,18 @@ type Broker struct {
 	// sent to.
 	ReplyDomains []string `yaml:"reply_domains,omitempty"`
 	// ReplyNames are other brands this broker is known to reply under - a
-	// parent company's name, when a reply names the parent rather than this
-	// entity (e.g. Acuant, Inc. is recorded here under its own name, but its
-	// privacy team replies as "GBG Privacy and Data Compliance Team" - GBG
-	// being the parent, a name that appears nowhere else in this record).
-	// Used only for inbox reply matching, e.g. a shared privacy-request
-	// platform that names the client only in the sender display name, not
-	// the sending domain; never sent to.
+	// parent company's name, or a brand its own ID/Name doesn't otherwise
+	// spell out. Recorded here when a reply names something that appears
+	// nowhere else in this record: Acuant, Inc.'s privacy team replies as
+	// "GBG Privacy and Data Compliance Team" (GBG being its parent), and
+	// National Data Analytics, LLC replies from a Zendesk tenant whose
+	// domain-derived label is "publicdatacheck" - their brand, not their
+	// registered name. Used only for inbox reply matching: a helpdesk tenant
+	// slug is checked against these the same as ID/Name (see
+	// Monitor.SetContactedBrokers), and a shared privacy-request platform
+	// that names the client only in the sender display name, not the
+	// sending domain, checks these too (see brokerFromSenderDisplayName).
+	// Never sent to.
 	ReplyNames []string `yaml:"reply_names,omitempty"`
 }
 
